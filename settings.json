@@ -1,0 +1,7 @@
+{
+  "upload_path": "/uploads",
+  "db_host": "localhost",
+  "db_base": "porssiguru",
+  "db_user": "root",
+  "db_pass": ""
+}
