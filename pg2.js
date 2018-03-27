@@ -10,6 +10,8 @@ console.log(settings.upload_path);
 
 const app = express();
 
+app.use(require('json-middleware').middleware());
+
 
 // static GET on /uploads: serve images
 app.use('/uploads', express.static(__dirname + settings.upload_path));
@@ -43,6 +45,43 @@ app.get('/leaderboard', (req, res) => {
       return res.end();
     }
   });
+});
+
+// POST on /login
+app.post('/login', (req, res) => {
+
+  const form = formidable.IncomingForm();
+  form.parse(req, (error, fields, files) => {
+    const username = fields.username;
+    const password = fields.password;
+
+    console.log(fields);
+    console.log(username);
+    console.log(password);
+
+    const json = {
+      username: username,
+      password: password
+    };
+
+    res.writeHead(200, {'Content-Type': 'text/json'});
+    res.write(JSON.stringify(json));
+    return res.end();
+  });
+  
+});
+
+// POST on /register
+app.post('/register', (req, res) => {
+
+  const form = formidable.IncomingForm();
+  form.parse(req, (error, fields, files) => {
+    const username = fields.username;
+    const password = fields.password;
+    const email = fields.email;
+    const referrer_code = fields.referrer_code;
+  });
+
 });
 
 // POST on /upload: send image files
