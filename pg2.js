@@ -68,7 +68,7 @@ app.post('/login', (req, res) => {
     res.write(JSON.stringify(json));
     return res.end();
   });
-  
+
 });
 
 // POST on /register
