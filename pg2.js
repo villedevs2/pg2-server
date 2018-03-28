@@ -47,6 +47,15 @@ app.get('/leaderboard', (req, res) => {
   });
 });
 
+
+const writeJSON = (res, json) => {
+  res.writeHead(200, {'Content-Type': 'text/json'});
+  res.write(JSON.stringify(json));
+  res.end();
+};
+
+
+
 // POST on /login
 app.post('/login', (req, res) => {
 
@@ -71,6 +80,14 @@ app.post('/login', (req, res) => {
 
 });
 
+const doesUsernameExist = (username, callback) => {
+  db.query(`SELECT id FROM user_account WHERE username='${username}'`, (error, results) => {
+    let value = results.length > 0;
+    callback(error, value);
+  });
+};
+
+
 // POST on /register
 app.post('/register', (req, res) => {
 
@@ -80,6 +97,27 @@ app.post('/register', (req, res) => {
     const password = fields.password;
     const email = fields.email;
     const referrer_code = fields.referrer_code;
+
+    doesUsernameExist(username, (error, value) => {
+      if (error) {
+        console.log(`Error: ${error}`);
+        writeJSON(res, { error: true, message: 'Database error'});
+      } else {
+
+        if (value) {
+          // username exists
+          writeJSON(res, { error: true, message: 'Username already exists'});
+        } else {
+          // nope, doesn't exist
+
+          // TODO: validate email, username
+          // TODO: salt/encrypt password
+          // TODO: validate referrer code if it exists
+
+          writeJSON(res, { error: false, message: 'Registering complete'});
+        }
+      }
+    });
   });
 
 });
