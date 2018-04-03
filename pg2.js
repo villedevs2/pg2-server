@@ -90,14 +90,15 @@ const doesUsernameExist = (username, callback) => {
 
 // POST on /register
 app.post('/register', (req, res) => {
-
   const form = formidable.IncomingForm();
+
   form.parse(req, (error, fields, files) => {
     const username = fields.username;
     const password = fields.password;
     const email = fields.email;
     const referrer_code = fields.referrer_code;
 
+    // check if the username already exists
     doesUsernameExist(username, (error, value) => {
       if (error) {
         console.log(`Error: ${error}`);
