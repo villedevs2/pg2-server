@@ -1,4 +1,3 @@
-const db = require('./database');
 const https = require('https');
 
 const jsdom = require('jsdom');
@@ -18,6 +17,8 @@ const trimStockURL = (url) => {
 const parseStockData = (html, market) => {
   const dom = new JSDOM(html);
   const a_elements = dom.window.document.querySelectorAll('a');
+
+  const stock_entries = [];
 
   a_elements.forEach((a_ele) => {
     let stock_link = false;
@@ -75,7 +76,6 @@ const parseStockData = (html, market) => {
           // replace commas with periods
           change = change.replace(/,/g, '.');
           change = parseFloat(change);
-          console.log(change);
           stock_data.change = change;
         }
 
@@ -91,27 +91,34 @@ const parseStockData = (html, market) => {
               market: market
             };
 
-            // TODO: update stock database
-            console.log(stock_entry);
+            stock_entries.push(stock_entry);
           }
         }
       }
     }
 
   });
+
+  return stock_entries;
+};
+
+module.exports = {
+  fetchStockData: (url, market, callback) => {
+    https.get(url, (res) => {
+      let body = '';
+      res.on('data', (data) => {
+        body += data;
+      });
+      res.on('end', () => {
+        //console.log(body);
+        const stock_entries = parseStockData(body, market);
+        //console.log(stock_entries);
+        callback(stock_entries);
+      });
+    });
+  }
 };
 
 
 
-https.get('https://beta.kauppalehti.fi/porssi/kurssit/FNFI', (res) => {
-  console.log(res);
 
-  let body = '';
-  res.on('data', (data) => {
-    body += data;
-  });
-  res.on('end', () => {
-    //console.log(body);
-    parseStockData(body);
-  });
-});

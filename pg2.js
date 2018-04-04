@@ -4,6 +4,16 @@ const util = require('util');
 const fs = require('fs');
 const db = require('./database');
 
+const av = require('./alpha-vantage');
+/*
+av.fetchStockData([{symbol: 'AAPL', name: 'Apple'},{symbol: 'MSFT', name: 'Microsoft'},{symbol: 'FB', name: 'Facebook'}], 'NASDAQ', (result) => {
+  console.log(result);
+});
+*/
+av.fetchCurrencyData('BTC', 'Bitcoin', 'EUR', (result) => {
+  console.log(result);
+})
+
 const settings = require('./settings.json');
 
 console.log(settings.upload_path);

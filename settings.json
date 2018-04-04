@@ -3,5 +3,6 @@
   "db_host": "localhost",
   "db_base": "porssiguru",
   "db_user": "root",
-  "db_pass": ""
+  "db_pass": "",
+  "alphavantage_apikey": "F07XVL4DE169DFQY"
 }
