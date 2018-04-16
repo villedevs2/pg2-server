@@ -90,19 +90,6 @@ const doesUsernameExist = (username, callback) => {
   });
 };
 
-
-const doesFBAccountExist = (account, callback) => {
-  const cipher = crypto.createCipher('aes-256-ctr', settings.db_crypto);
-  let token = `FB${cipher.update(account, 'utf8', 'hex')}`;
-
-  console.log(`Looking for token ${account}/${token}`);
-
-  db.query(`SELECT id FROM user_account WHERE account_link='${token}'`, (error, results) => {
-    let value = results.length > 0;
-    callback(error, value);
-  });
-};
-
 // POST on /register
 app.post('/register', (req, res) => {
   const form = formidable.IncomingForm();
@@ -138,6 +125,24 @@ app.post('/register', (req, res) => {
 
 });
 
+// *****************************************************************************
+// Check if an FB account is already registered in DB
+// *****************************************************************************
+const doesFBAccountExist = (account, callback) => {
+  const cipher = crypto.createCipher('aes-256-ctr', settings.db_crypto);
+  let token = `FB${cipher.update(account, 'utf8', 'hex')}`;
+
+  console.log(`Looking for token ${account}/${token}`);
+
+  db.query(`SELECT id FROM user_account WHERE account_link='${token}'`, (error, results) => {
+    let value = results.length > 0;
+    callback(error, value);
+  });
+};
+
+// *****************************************************************************
+// Validate an FB access token with FB
+// *****************************************************************************
 const isValidFBToken = (token, user_id, callback) => {
   const fbUrl = `https://graph.facebook.com/debug_token`;
 
@@ -169,7 +174,9 @@ const isValidFBToken = (token, user_id, callback) => {
   });
 };
 
-// POST on /bglogin: login via facebook
+// *****************************************************************************
+// POST on /fblogin: login via facebook
+// *****************************************************************************
 app.post('/fblogin', (req, res) => {
   const form = new formidable.IncomingForm();
 
@@ -178,16 +185,6 @@ app.post('/fblogin', (req, res) => {
     const auth_token = fields.auth_token;
     console.log(`user id = ${user_id}`);
     console.log(`auth token = ${auth_token}`);
-
-    /*
-    const fbUrl = `https://graph.facebook.com/oauth/access_token?
-                   grant_type=fb_exchange_token&
-                   client_id=${settings.fb_appid}&
-                   client_secret=${settings.fb_apps}&
-                   redirect_uri=localhost&
-                   fb_exchange_token=${json.auth_token}
-                   `;
-*/
 
     // verify from Facebook that this is a valid access token for this user
     isValidFBToken(auth_token, user_id, (valid) => {
@@ -213,10 +210,54 @@ app.post('/fblogin', (req, res) => {
   });
 });
 
+// *****************************************************************************
+// POST on /fbregister: register via facebook
+// *****************************************************************************
+app.post('/fbregister', (reg, res) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(req, (err, fields, files) => {
+    const user_id = fields.user_id;
+    const auth_token = fields.auth_token;
+    const user_name = fields.user_name;
+
+    // TODO: more info
+
+    // first check for valid FB token
+    isValidFBToken(auth_token, user_id, (valid) => {
+      if (valid) {
+        // check if the account already exists
+        doesFBAccountExist(user_id, (error, exists) => {
+          if (error) {
+            throw error;
+          }
+
+          // if not, try to register
+          if (!exists) {
+            registerWithFB(user_id, user_name, (error, result) => {
+              if (error) {
+                throw error;
+              }
+
+
+            });
+          } else {
+            writeJSON(res, {message: "Account already exists", error: true});
+          }
+        });
+      } else {
+        writeJSON(res, {message: "Invalid access token", error: true});
+      }
+    });
+  });
+});
 
 
 
+
+// *****************************************************************************
 // POST on /upload: send image files
+// *****************************************************************************
 app.post('/upload', (req, res) => {
   const form = new formidable.IncomingForm();
 
