@@ -5,6 +5,8 @@ const fs = require('fs');
 const https = require('https');
 const db = require('./database');
 
+const crypto = require('crypto');
+
 const settings = require('./settings.json');
 
 console.log(settings.upload_path);
@@ -88,6 +90,18 @@ const doesUsernameExist = (username, callback) => {
   });
 };
 
+
+const doesFBAccountExist = (account, callback) => {
+  const cipher = crypto.createCipher('aes-256-ctr', settings.db_crypto);
+  let token = `FB${cipher.update(account, 'utf8', 'hex')}`;
+
+  console.log(`Looking for token ${account}/${token}`);
+
+  db.query(`SELECT id FROM user_account WHERE account_link='${token}'`, (error, results) => {
+    let value = results.length > 0;
+    callback(error, value);
+  });
+};
 
 // POST on /register
 app.post('/register', (req, res) => {
@@ -178,9 +192,22 @@ app.post('/fblogin', (req, res) => {
     // verify from Facebook that this is a valid access token for this user
     isValidFBToken(auth_token, user_id, (valid) => {
       if (valid) {
-        writeJSON(res, {message: "Valid login!", error: false});
+        doesFBAccountExist(user_id, (error, exists) => {
+          if (error) {
+            throw error;
+          }
+
+          if (exists) {
+            // TODO: get access token
+
+            writeJSON(res, {message: "OK", error: false});
+          } else {
+            writeJSON(res, {message: "Account doesn't exist", error: true});
+          }
+        });
+
       } else {
-        writeJSON(res, {message: "Invalid login!", error: true});
+        writeJSON(res, {message: "Invalid access token!", error: true});
       }
     });
   });
