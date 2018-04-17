@@ -4,8 +4,7 @@ const util = require('util');
 const fs = require('fs');
 const https = require('https');
 const db = require('./database');
-
-const crypto = require('crypto');
+const facebook = require('./facebook');
 
 const settings = require('./settings.json');
 
@@ -126,55 +125,6 @@ app.post('/register', (req, res) => {
 });
 
 // *****************************************************************************
-// Check if an FB account is already registered in DB
-// *****************************************************************************
-const doesFBAccountExist = (account, callback) => {
-  const cipher = crypto.createCipher('aes-256-ctr', settings.db_crypto);
-  let token = `FB${cipher.update(account, 'utf8', 'hex')}`;
-
-  console.log(`Looking for token ${account}/${token}`);
-
-  db.query(`SELECT id FROM user_account WHERE account_link='${token}'`, (error, results) => {
-    let value = results.length > 0;
-    callback(error, value);
-  });
-};
-
-// *****************************************************************************
-// Validate an FB access token with FB
-// *****************************************************************************
-const isValidFBToken = (token, user_id, callback) => {
-  const fbUrl = `https://graph.facebook.com/debug_token`;
-
-  const inputToken = `input_token=${token}`;
-  const accessToken = `access_token=${settings.fb_appid}|${settings.fb_apps}`;
-
-  https.get(`${fbUrl}?${inputToken}&${accessToken}`, (res) => {
-    let body = '';
-    res.on('data', (data) => {
-      body += data;
-    });
-    res.on('end', () => {
-      console.log(body);
-
-      const response = JSON.parse(body);
-
-      console.log(response.data.app_id);
-      console.log(response.data.user_id);
-      console.log(response.data.is_valid);
-
-      if (response.data.app_id === settings.fb_appid &&
-          response.data.user_id === user_id &&
-          response.data.is_valid === true) {
-        callback(true);
-      } else {
-        callback(false);
-      }
-    });
-  });
-};
-
-// *****************************************************************************
 // POST on /fblogin: login via facebook
 // *****************************************************************************
 app.post('/fblogin', (req, res) => {
@@ -186,27 +136,14 @@ app.post('/fblogin', (req, res) => {
     console.log(`user id = ${user_id}`);
     console.log(`auth token = ${auth_token}`);
 
-    // verify from Facebook that this is a valid access token for this user
-    isValidFBToken(auth_token, user_id, (valid) => {
-      if (valid) {
-        doesFBAccountExist(user_id, (error, exists) => {
-          if (error) {
-            throw error;
-          }
-
-          if (exists) {
-            // TODO: get access token
-
-            writeJSON(res, {message: "OK", error: false});
-          } else {
-            writeJSON(res, {message: "Account doesn't exist", error: true});
-          }
-        });
-
+    facebook.login(user_id, auth_token, (error, json) => {
+      if (error) {
+        writeJSON(res, {message: json.message, error: true});
       } else {
-        writeJSON(res, {message: "Invalid access token!", error: true});
+        writeJSON(res, {message: json.message, error: false});
       }
     });
+
   });
 });
 
@@ -223,32 +160,14 @@ app.post('/fbregister', (reg, res) => {
 
     // TODO: more info
 
-    // first check for valid FB token
-    isValidFBToken(auth_token, user_id, (valid) => {
-      if (valid) {
-        // check if the account already exists
-        doesFBAccountExist(user_id, (error, exists) => {
-          if (error) {
-            throw error;
-          }
-
-          // if not, try to register
-          if (!exists) {
-            registerWithFB(user_id, user_name, (error, result) => {
-              if (error) {
-                throw error;
-              }
-
-
-            });
-          } else {
-            writeJSON(res, {message: "Account already exists", error: true});
-          }
-        });
+    facebook.register(user_id, auth_token, user_name, (error, json) => {
+      if (error) {
+        writeJSON(res, {message: json.message, error: true});
       } else {
-        writeJSON(res, {message: "Invalid access token", error: true});
+        writeJSON(res, {message: json.message, error: false});
       }
     });
+
   });
 });
 
