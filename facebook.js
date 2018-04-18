@@ -6,9 +6,10 @@ const https = require('https');
 
 const settings = require('./settings.json');
 
+const IV_LENGTH = 16;
 
 const encryptUserID = (user_id) => {
-  const iv = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(IV_LENGTH);
 
   const key = settings.db_crypto;
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
@@ -22,11 +23,11 @@ const encryptUserID = (user_id) => {
 };
 
 const decryptUserID = (user_id) => {
-  const iv = new Buffer(user_id.slice(2, 34), 'hex');
+  const iv = new Buffer(user_id.slice(2, 2 + (IV_LENGTH * 2)), 'hex');
 
   const key = settings.db_crypto;
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  const ct = user_id.slice(34);
+  const ct = user_id.slice(2 + (IV_LENGTH * 2));
 
   let decrypted = decipher.update(ct, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
