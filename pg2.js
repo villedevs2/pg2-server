@@ -150,7 +150,7 @@ app.post('/fblogin', (req, res) => {
 // *****************************************************************************
 // POST on /fbregister: register via facebook
 // *****************************************************************************
-app.post('/fbregister', (reg, res) => {
+app.post('/fbregister', (req, res) => {
   const form = new formidable.IncomingForm();
 
   form.parse(req, (err, fields, files) => {
@@ -158,15 +158,22 @@ app.post('/fbregister', (reg, res) => {
     const auth_token = fields.auth_token;
     const user_name = fields.user_name;
 
+
     // TODO: more info
 
-    facebook.register(user_id, auth_token, user_name, (error, json) => {
-      if (error) {
-        writeJSON(res, {message: json.message, error: true});
-      } else {
-        writeJSON(res, {message: json.message, error: false});
-      }
-    });
+    if (user_id !== undefined && auth_token !== undefined && user_name !== undefined) {
+
+      facebook.register(user_id, auth_token, user_name, (error, json) => {
+        if (error) {
+          writeJSON(res, {message: json.message, error: true});
+        } else {
+          writeJSON(res, {message: json.message, error: false});
+        }
+      });
+
+    } else {
+      writeJSON(res, {message: "Invalid parameters", error: true});
+    }
 
   });
 });
