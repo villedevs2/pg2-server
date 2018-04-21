@@ -1,49 +1,48 @@
 // Facebook authentication module
 
-const db = require('./database');
+
 const crypto = require('crypto');
 const https = require('https');
 
+const db = require('./database');
+const user = require('./user');
+
 const settings = require('./settings.json');
 
-const IV_LENGTH = 16;
-
-const encryptUserID = (user_id) => {
-  const iv = crypto.randomBytes(IV_LENGTH);
-
-  const key = settings.db_crypto;
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  const iv_string = iv.toString('hex');
-
-  let encrypted = cipher.update(user_id, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-
-  const token = `FB${iv_string}${encrypted}`;
-  return token;
+// *****************************************************************************
+// Hash a FB account ID
+// *****************************************************************************
+const hashFBAccount = (fb_account) => {
+  const hash = crypto.createHash('sha256');
+  hash.update(fb_account);
+  const digest = `FB${hash.digest('hex')}`;
+  return digest;
 };
 
-const decryptUserID = (user_id) => {
-  const iv = new Buffer(user_id.slice(2, 2 + (IV_LENGTH * 2)), 'hex');
+// *****************************************************************************
+// Get a user ID for a given FB account
+// *****************************************************************************
+const getUserID = (fb_account, callback) => {
+  const token = hashFBAccount(fb_account);
 
-  const key = settings.db_crypto;
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  const ct = user_id.slice(2 + (IV_LENGTH * 2));
+  console.log(token);
 
-  let decrypted = decipher.update(ct, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+  let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
+
+  db.query(sql, (error, results) => {
+    let value = null;
+    if (results.length > 0) {
+      value = results[0].id;
+    }
+    callback(error, value);
+  });
 };
 
 // *****************************************************************************
 // Check if an FB account is already registered in DB
 // *****************************************************************************
-const isFBAccountRegistered = (account, callback) => {
-  const token = encryptUserID(account);
-
-  console.log(`Looking for token ${account}/${token}`);
-
-  console.log(`Token decrypt: ${decryptUserID(token)}`);
-
+const isFBAccountRegistered = (fb_account, callback) => {
+  const token = hashFBAccount(fb_account);
 
   let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
 
@@ -68,15 +67,15 @@ const isUsernameRegistered = (username, callback) => {
 // *****************************************************************************
 // Register a new user using Facebook
 // *****************************************************************************
-const registerWithFB = (user_id, user_name, callback) => {
-  const token = encryptUserID(user_id);
+const registerWithFB = (fb_account, user_name, callback) => {
+  const token = hashFBAccount(fb_account);
 
   let sql = '';
   sql += `INSERT INTO user_account(username, account_link, access_token, signup_date) `;
   sql += `VALUES('${user_name}', '${token}', NULL, CURRENT_TIMESTAMP)`;
 
   db.query(sql, (error, results) => {
-    let value = results.length > 0;
+    let value = results.affectedRows === 1;
     callback(error, value);
   });
 };
@@ -96,13 +95,7 @@ const isValidFBToken = (token, user_id, callback) => {
       body += data;
     });
     res.on('end', () => {
-      console.log(body);
-
       const response = JSON.parse(body);
-
-      console.log(response.data.app_id);
-      console.log(response.data.user_id);
-      console.log(response.data.is_valid);
 
       if (response.data.app_id === settings.fb_appid &&
           response.data.user_id === user_id &&
@@ -118,35 +111,50 @@ const isValidFBToken = (token, user_id, callback) => {
 
 module.exports = {
 
-  login: (user_id, auth_token, callback) => {
+  login: (fb_account, auth_token, callback) => {
     // verify from Facebook that this is a valid access token for this user
-    isValidFBToken(auth_token, user_id, (valid) => {
+    isValidFBToken(auth_token, fb_account, (valid) => {
       if (valid) {
-        isFBAccountRegistered(user_id, (error, exists) => {
+        isFBAccountRegistered(fb_account, (error, exists) => {
           if (error) {
             throw error;
           }
 
+          // if account exists, try to login
           if (exists) {
-            // TODO: get access token
-            callback(false, {message: "OK"});
+            getUserID(fb_account, (error, user_id) => {
+              if (user_id !== null) {
+                const access_token = user.generateAccessToken();
+
+                user.updateAccessToken(user_id, access_token, (error, response) => {
+                  if (!error && response) {
+                    callback({error: false, message: "OK", token: access_token});
+                  } else {
+                    callback({error: true, message: "Cannot update access token"});
+                  }
+                });
+
+              } else {
+                callback({error: true, message: "User ID not found"});
+              }
+            });
           } else {
-            callback(true, {message: "Account doesn't exist"});
+            callback({error: true, message: "Account doesn't exist"});
           }
         });
 
       } else {
-        callback(true, {message: "Invalid access token"});
+        callback({error: true, message: "Invalid access token"});
       }
     });
   },
 
-  register: (user_id, auth_token, user_name, callback) => {
+  register: (fb_account, auth_token, user_name, callback) => {
     // first check for valid FB token
-    isValidFBToken(auth_token, user_id, (valid) => {
+    isValidFBToken(auth_token, fb_account, (valid) => {
       if (valid) {
         // check if the account already exists
-        isFBAccountRegistered(user_id, (error, exists) => {
+        isFBAccountRegistered(fb_account, (error, exists) => {
           if (error) {
             throw error;
           }
@@ -162,25 +170,45 @@ module.exports = {
 
               // if not, try to register
               if (!username_exists) {
-                registerWithFB(user_id, user_name, (error, result) => {
+                registerWithFB(fb_account, user_name, (error, result) => {
                   if (error) {
                     throw error;
                   }
 
-                  // TODO: autologin and return access token
-                  callback(false, {message: "OK"});
+                  // if registering worked, try to login
+                  if (result) {
+                    getUserID(fb_account, (error, user_id) => {
+                      if (user_id !== null) {
+                        const access_token = user.generateAccessToken();
+
+                        user.updateAccessToken(user_id, access_token, (error, response) => {
+                          if (!error && response) {
+                            callback({error: false, message: "OK", token: access_token});
+                          } else {
+                            callback({error: true, message: "Cannot update access token"});
+                          }
+                        });
+
+                      } else {
+                        callback({error: true, message: "User ID not found"});
+                      }
+                    });
+                  } else {
+                    callback({error: true, message: "Registering failed"});
+                  }
                 });
+
               } else {
-                callback(true, {message: "Username already exists"});
+                callback({error: true, message: "Username already exists"});
               }
             });
 
           } else {
-            callback(true, {message: "Account already exists"});
+            callback({error: true, message: "Account already exists"});
           }
         });
       } else {
-        callback(true, {message: "Invalid access token"});
+        callback({error: true, message: "Invalid access token"});
       }
     });
   }

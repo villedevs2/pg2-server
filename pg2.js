@@ -136,12 +136,8 @@ app.post('/fblogin', (req, res) => {
     console.log(`user id = ${user_id}`);
     console.log(`auth token = ${auth_token}`);
 
-    facebook.login(user_id, auth_token, (error, json) => {
-      if (error) {
-        writeJSON(res, {message: json.message, error: true});
-      } else {
-        writeJSON(res, {message: json.message, error: false});
-      }
+    facebook.login(user_id, auth_token, (result) => {
+      writeJSON(res, result);
     });
 
   });
@@ -163,12 +159,8 @@ app.post('/fbregister', (req, res) => {
 
     if (user_id !== undefined && auth_token !== undefined && user_name !== undefined) {
 
-      facebook.register(user_id, auth_token, user_name, (error, json) => {
-        if (error) {
-          writeJSON(res, {message: json.message, error: true});
-        } else {
-          writeJSON(res, {message: json.message, error: false});
-        }
+      facebook.register(user_id, auth_token, user_name, (result) => {
+        writeJSON(res, result);
       });
 
     } else {
