@@ -16,10 +16,42 @@ const trimStockURL = (url) => {
 
 const parseStockData = (html, market) => {
   const dom = new JSDOM(html);
-  const a_elements = dom.window.document.querySelectorAll('a');
+  const script_elements = dom.window.document.querySelectorAll('script');
+
+  let json = null;
+
+  for (let el=0; el < script_elements.length; el++) {
+    const text = script_elements[el].textContent;
+    const find = `"shares":`;
+    let start = text.indexOf(find);
+    if (start >= 0) {
+      start += find.length;
+      let brack_count = 0;
+      let sliced = '';
+      // count open and closed brackets until we're done
+      for (let i=start; i < text.length; i++) {
+        const char = text[i];
+        if (char === '[') {
+          brack_count++;
+        } else if (char === ']') {
+          brack_count--;
+        }
+
+        sliced += text[i];
+
+        if (brack_count === 0)
+          break;
+      }
+
+      json = JSON.parse(sliced);
+      break;
+    }
+  }
+
+  console.log(json);
 
   const stock_entries = [];
-
+/*
   a_elements.forEach((a_ele) => {
     let stock_link = false;
     let href = null;
@@ -79,6 +111,10 @@ const parseStockData = (html, market) => {
           stock_data.change = change;
         }
 
+        console.log(stock_data.company);
+        console.log(stock_data.price);
+        console.log(stock_data.change);
+
         // everything must be non-null
         if (stock_data.company !== null && stock_data.price !== null && stock_data.change !== null) {
           // price must be non-zero
@@ -98,7 +134,7 @@ const parseStockData = (html, market) => {
     }
 
   });
-
+*/
   return stock_entries;
 };
 
@@ -110,9 +146,9 @@ module.exports = {
         body += data;
       });
       res.on('end', () => {
-        //console.log(body);
+        ///console.log(body);
         const stock_entries = parseStockData(body, market);
-        //console.log(stock_entries);
+        console.log(stock_entries);
         callback(stock_entries);
       });
     });
