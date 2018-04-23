@@ -12,9 +12,9 @@ const ACCESS_TOKEN_ID = 'PGTOKEN';
 
 
 module.exports = {
-  // *****************************************************************************
+  // ***************************************************************************
   // Generate a new access token
-  // *****************************************************************************
+  // ***************************************************************************
   generateAccessToken: () => {
     const header_buffer = Buffer(9);
     header_buffer.writeUInt16BE(ACCESS_TOKEN_VERSION, 0);
@@ -36,9 +36,9 @@ module.exports = {
     return `${iv_string}${encrypted}`;
   },
 
-  // *****************************************************************************
+  // ***************************************************************************
   // Check whether this a valid access token
-  // *****************************************************************************
+  // ***************************************************************************
   validateAccessToken: (token) => {
     const iv = new Buffer(token.slice(0, 32), 'hex');
     const key = settings.db_crypto;
@@ -56,15 +56,42 @@ module.exports = {
     return (version === ACCESS_TOKEN_VERSION && tokid === ACCESS_TOKEN_ID);
   },
 
-  // *****************************************************************************
+  // ***************************************************************************
   // Update the access token for a given user ID
-  // *****************************************************************************
+  // ***************************************************************************
   updateAccessToken: (user_id, access_token, callback) => {
     let sql = `UPDATE user_account SET access_token='${access_token}' WHERE id='${user_id}'`;
 
     db.query(sql, (error, results) => {
       let value = results.changedRows === 1;
       callback(error, value);
+    });
+  },
+
+  // ***************************************************************************
+  // Gets info for a user with User ID and Access Token
+  // ***************************************************************************
+  getInfo: (user_id, access_token, callback) => {
+    let sql = `SELECT username, access_token, signup_date, image `;
+    sql +=    `FROM user_account WHERE id='${user_id}'`;
+
+    db.query(sql, (error, results) => {
+      if (results.length === 1) {
+        if (results[0].access_token === access_token) {
+          const response = {
+            error: false,
+            message: 'OK',
+            username: results[0].username,
+            image: results[0].image,
+            signup_date: results[0].signup_date
+          };
+          callback(error, response);
+        } else {
+          callback(error, {error: true, message: "Wrong access token"});
+        }
+      } else {
+        callback(error, {error: true, message: "Database error"});
+      }
     });
   },
 };

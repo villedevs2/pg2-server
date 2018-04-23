@@ -5,6 +5,7 @@ const fs = require('fs');
 const https = require('https');
 const db = require('./database');
 const facebook = require('./facebook');
+const user = require('./user');
 
 const settings = require('./settings.json');
 
@@ -167,6 +168,32 @@ app.post('/fbregister', (req, res) => {
       writeJSON(res, {message: "Invalid parameters", error: true});
     }
 
+  });
+});
+
+// *****************************************************************************
+// POST on /userinfo: get user information
+// *****************************************************************************
+app.post('/userinfo', (req, res) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(req, (err, fields, files) => {
+    const user_id = fields.user_id;
+    const access_token = fields.token;
+
+    if (user_id !== undefined && access_token !== undefined) {
+      if (user.validateAccessToken(access_token)) {
+
+        user.getInfo(user_id, access_token, (error, result) => {
+          writeJSON(res, result);
+        });
+
+      } else {
+        writeJSON(res, {error: true, message: "Invalid access token"});
+      }
+    } else {
+      writeJSON(res, {error: true, message: "Invalid parameters"});
+    }
   });
 });
 

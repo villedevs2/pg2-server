@@ -128,7 +128,7 @@ module.exports = {
 
                 user.updateAccessToken(user_id, access_token, (error, response) => {
                   if (!error && response) {
-                    callback({error: false, message: "OK", token: access_token});
+                    callback({error: false, message: "OK", user_id: user_id, token: access_token});
                   } else {
                     callback({error: true, message: "Cannot update access token"});
                   }
@@ -183,7 +183,7 @@ module.exports = {
 
                         user.updateAccessToken(user_id, access_token, (error, response) => {
                           if (!error && response) {
-                            callback({error: false, message: "OK", token: access_token});
+                            callback({error: false, message: "OK", user_id: user_id, token: access_token});
                           } else {
                             callback({error: true, message: "Cannot update access token"});
                           }
