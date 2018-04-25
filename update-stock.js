@@ -13,40 +13,51 @@ const getMarketID = (market, callback) => {
   });
 };
 
-/*
-const xhelUrl = 'https://beta.kauppalehti.fi/porssi/kurssit/XHEL';
+const isStockInDB = (symbol, market_id) => {
+  return new Promise((resolve, reject) => {
+    let sql = `SELECT id FROM stock WHERE symbol='${symbol}' AND market_id='${market_id}'`;
 
-kauppalehti.fetchStockData(xhelUrl, 'XHEL', (results) => {
-  console.log(results);
-});
-*/
+    db.query(sql, (error, results) => {
+      if (error) {
+        reject(`isStockInDB database error`);
+      } else {
+        resolve(results.length === 1);
+      }
+    });
 
-const isStockInDB = (symbol, market_id, callback) => {
-  let sql = `SELECT id FROM stock WHERE symbol='${symbol}' AND market_id='${market_id}'`;
-
-  db.query(sql, (error, results) => {
-    callback(error, results.length === 1);
   });
 };
 
-const insertStockToDatabase = (stock, callback) => {
-  let sql = `INSERT INTO stock(market_id, symbol, full_name, price, variety, update_date)`;
-  sql += `VALUES('${stock.market_id}', '${stock.symbol}', '${stock.fullname}', '${stock.price}', '${stock.change}', CURRENT_TIMESTAMP)`;
+const insertStockToDatabase = (stock) => {
+  return new Promise((resolve, reject) => {
+    let sql = `INSERT INTO stock(market_id, symbol, full_name, price, variety, update_date)`;
+    sql += `VALUES('${stock.market_id}', '${stock.symbol}', '${stock.fullname}', '${stock.price}', '${stock.change}', CURRENT_TIMESTAMP)`;
 
-  db.query(sql, (error, results) => {
-    // this operation should affect exactly one row if it succeeds
-    callback(error, results.affectedRows === 1);
+    db.query(sql, (error, results) => {
+      if (error) {
+        reject(`insertStockToDatabase database error`);
+      } else {
+        // this operation should affect exactly one row if it succeeds
+        resolve(results.affectedRows === 1);
+      }
+    });
   });
 };
 
-const updateStockInDatabase = (stock, callback) => {
-  let sql = `UPDATE stock `;
-  sql += `SET price='${stock.price}', variety='${stock.change}', update_date=CURRENT_TIMESTAMP `;
-  sql += `WHERE symbol='${stock.symbol}' AND market_id='${stock.market_id}'`;
+const updateStockInDatabase = (stock) =>  {
+  return new Promise((resolve, reject) => {
+    let sql = `UPDATE stock `;
+    sql += `SET price='${stock.price}', variety='${stock.change}', update_date=CURRENT_TIMESTAMP `;
+    sql += `WHERE symbol='${stock.symbol}' AND market_id='${stock.market_id}'`;
 
-  db.query(sql, (error, results) => {
-    // this operation should affect exactly one row if it succeeds
-    callback(error, results.affectedRows === 1);
+    db.query(sql, (error, results) => {
+      if (error) {
+        reject(`updateStockInDatabase database error`);
+      } else {
+        // this operation should affect exactly one row if it succeeds
+        resolve(results.affectedRows === 1);
+      }
+    });
   });
 };
 
@@ -57,26 +68,24 @@ const updateStockEntry = (stock) => {
     const symbol = stock.symbol;
     const market_id = stock.market_id;
 
-    isStockInDB(symbol, market_id, (error, result) => {
+    isStockInDB(symbol, market_id).then((result) => {
       if (result === true) {
         console.log(`${symbol} exists in database. Updating.`);
-        updateStockInDatabase(stock, (error, result) => {
-          if (error || !result) {
-            reject('Database error on update.');
-          } else {
-            resolve();
-          }
+        updateStockInDatabase(stock).then((res) => {
+          resolve();
+        }).catch((error) => {
+          reject('Database error on update');
         });
       } else {
         console.log(`Adding new entry ${symbol}`);
-        insertStockToDatabase(stock, (error, result) => {
-          if (error || !result) {
-            reject('Database error on insert');
-          } else {
-            resolve();
-          }
+        insertStockToDatabase(stock).then((res) => {
+          resolve();
+        }).catch((error) => {
+          reject('Database error on insert');
         });
       }
+    }).catch((error) => {
+      console.log(error);
     });
 
   });
