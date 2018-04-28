@@ -105,7 +105,7 @@ module.exports = {
         body += data;
       });
       res.on('end', () => {
-        ///console.log(body);
+        //console.log(body);
         const stock_entries = parseStockData(body, market);
         console.log(stock_entries);
         callback(stock_entries);

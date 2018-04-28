@@ -2,14 +2,19 @@ const db = require('./database');
 const kauppalehti = require('./kauppalehti-parser');
 const alphavantage = require('./alpha-vantage');
 
-const getMarketID = (market, callback) => {
-  let sql = `SELECT id FROM stock_market WHERE shortname='${market}'`;
+const getMarketID = (market, url) => {
+  return new Promise((resolve, reject) => {
+    let sql = `SELECT id FROM stock_market WHERE shortname='${market}'`;
 
-  db.query(sql, (error, results) => {
-    if (results.length === 1) {
-      const id = results[0].id;
-      callback(error, id);
-    }
+    db.query(sql, (error, results) => {
+      if (error) {
+        reject(`getMarketID database error`);
+      } else if (results.length !== 1) {
+        reject(`getMarketID not found`);
+      } else {
+        resolve({id: results[0].id, url: url});
+      }
+    });
   });
 };
 
@@ -91,9 +96,9 @@ const updateStockEntry = (stock) => {
   });
 };
 
-getMarketID('XHEL', (error, id) => {
-  const url = 'https://beta.kauppalehti.fi/porssi/kurssit/XHEL';
-  kauppalehti.fetchStockData(url, id, (results) => {
+
+getMarketID('XHEL', 'https://beta.kauppalehti.fi/porssi/kurssit/XHEL').then((market_id) => {
+  kauppalehti.fetchStockData(market_id.url, market_id.id, (results) => {
     let entries = [];
 
     // insert promises
@@ -110,51 +115,3 @@ getMarketID('XHEL', (error, id) => {
     });
   });
 });
-
-
-/*
-const updateStockList = (stock_list) => {
-  stock_list.forEach((stock) => {
-    const symbol = stock.symbol;
-    const market_id = stock.market_id;
-
-    isStockInDB(symbol, market_id, (error, result) => {
-      console.log(`${symbol} in db ${result}`);
-      if (result === true) {
-        console.log(`${symbol} exists in database. Updating.`);
-        updateStockInDatabase(stock, (error, result) => {
-          if (error || !result) {
-            console.log('Database error on update.');
-          }
-        });
-      } else {
-        console.log(`Adding new entry ${symbol}`);
-        insertStockToDatabase(stock, (error, result) => {
-          if (error || !result) {
-            console.log('Database error on insert');
-          }
-        });
-      }
-    });
-  });
-  console.log('doneski');
-};
-
-const baseUrl = 'https://beta.kauppalehti.fi/porssi/kurssit/';
-
-
-getMarketID('XHEL', (error, id) => {
-  const url = 'https://beta.kauppalehti.fi/porssi/kurssit/XHEL';
-  kauppalehti.fetchStockData(url, id, (results) => {
-    //console.log(results);
-    updateStockList(results);
-  });
-});
-*/
-/*
-const fnfiUrl = 'https://beta.kauppalehti.fi/porssi/kurssit/FNFI';
-
-kauppalehti.fetchStockData(fnfiUrl, 'FNFI', (results) => {
-  console.log(results);
-});
-*/
