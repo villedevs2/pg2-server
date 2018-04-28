@@ -96,54 +96,31 @@ const updateStockEntry = (stock) => {
   });
 };
 
-/*
-getMarketID('XHEL', 'https://beta.kauppalehti.fi/porssi/kurssit/XHEL').then((market_id) => {
-  kauppalehti.fetchStockData(market_id.url, market_id.id).then((results)  => {
-    let entries = [];
-
-    // insert promises
-    results.forEach((result) => {
-      entries.push(updateStockEntry(result));
-    });
-
-    // execute all
-    Promise.all(entries).then((res) => {
-      console.log('donetski');
-      db.shutdown();
-    }).catch((error) => {
-      console.log(`promise error ${error}`);
-    });
-  }).catch((error) => {
-    console.log(error);
-  });
-});
-*/
-
 let markets = [
     getMarketID('XHEL', 'https://beta.kauppalehti.fi/porssi/kurssit/XHEL'),
     getMarketID('FNFI', 'https://beta.kauppalehti.fi/porssi/kurssit/FNFI'),
 ];
 
+// get all market IDs
 Promise.all(markets).then((results) => {
   //console.log(results);
 
+  // promises for each stock market
   let stocks = [];
   results.forEach((market_result) => {
     stocks.push(kauppalehti.fetchStockData(market_result.url, market_result.id));
   });
 
+  // get all market lists
   Promise.all(stocks).then((market_lists) => {
     let stock_entries = [];
 
+    // get all stock entries
     market_lists.forEach((market_list) => {
-      //console.log(res);
       market_list.forEach((stock_item) => {
-        //console.log(stock_item);
         stock_entries.push(stock_item);
       });
     });
-
-    //console.log(stock_entries);
 
     let update_entries = [];
 
