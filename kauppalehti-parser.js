@@ -98,19 +98,22 @@ const parseStockData = (html, market) => {
 };
 
 module.exports = {
-  fetchStockData: (url, market, callback) => {
-    https.get(url, (res) => {
-      let body = '';
-      res.on('data', (data) => {
-        body += data;
-      });
-      res.on('end', () => {
-        //console.log(body);
-        const stock_entries = parseStockData(body, market);
-        console.log(stock_entries);
-        callback(stock_entries);
+  fetchStockData: (url, market) => {
+    return new Promise((resolve, reject) => {
+      https.get(url, (res) => {
+        let body = '';
+        res.on('data', (data) => {
+          body += data;
+        });
+        res.on('end', () => {
+          //console.log(body);
+          const stock_entries = parseStockData(body, market);
+          //console.log(stock_entries);
+          resolve(stock_entries);
+        });
       });
     });
+
   }
 };
 
