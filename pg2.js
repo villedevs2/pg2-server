@@ -83,10 +83,16 @@ app.post('/login', (req, res) => {
 
 });
 
-const doesUsernameExist = (username, callback) => {
-  db.query(`SELECT id FROM user_account WHERE username='${username}'`, (error, results) => {
-    let value = results.length > 0;
-    callback(error, value);
+const doesUsernameExist = (username) => {
+  return new Promise((resolve, reject) => {
+    db.query(`SELECT id FROM user_account WHERE username='${username}'`, (error, results) => {
+      if (error) {
+        reject(error);
+      }
+
+      let value = results.length > 0;
+      resolve(value);
+    });
   });
 };
 
@@ -101,7 +107,7 @@ app.post('/register', (req, res) => {
     const referrer_code = fields.referrer_code;
 
     // check if the username already exists
-    doesUsernameExist(username, (error, value) => {
+    doesUsernameExist(username).then((value) => {
       if (error) {
         console.log(`Error: ${error}`);
         writeJSON(res, { error: true, message: 'Database error'});
@@ -120,6 +126,8 @@ app.post('/register', (req, res) => {
           writeJSON(res, { error: false, message: 'Registering complete'});
         }
       }
+    }).catch((error) => {
+      writeJSON(res, {error: true, message: error});
     });
   });
 
@@ -137,8 +145,10 @@ app.post('/fblogin', (req, res) => {
     console.log(`user id = ${user_id}`);
     console.log(`auth token = ${auth_token}`);
 
-    facebook.login(user_id, auth_token, (result) => {
+    facebook.login(user_id, auth_token).then((result) => {
       writeJSON(res, result);
+    }).catch((error) => {
+      writeJSON(res, {error: true, message: error});
     });
 
   });
@@ -160,8 +170,10 @@ app.post('/fbregister', (req, res) => {
 
     if (user_id !== undefined && auth_token !== undefined && user_name !== undefined) {
 
-      facebook.register(user_id, auth_token, user_name, (result) => {
+      facebook.register(user_id, auth_token, user_name).then((result) => {
         writeJSON(res, result);
+      }).catch((error) => {
+        writeJSON(res, {error: true, message: error});
       });
 
     } else {
@@ -184,8 +196,10 @@ app.post('/userinfo', (req, res) => {
     if (user_id !== undefined && access_token !== undefined) {
       if (user.validateAccessToken(access_token)) {
 
-        user.getInfo(user_id, access_token, (error, result) => {
+        user.getInfo(user_id, access_token).then((result) => {
           writeJSON(res, result);
+        }).catch((error) => {
+          writeJSON(res, {error: true, message: error});
         });
 
       } else {

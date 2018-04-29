@@ -22,195 +22,225 @@ const hashFBAccount = (fb_account) => {
 // *****************************************************************************
 // Get a user ID for a given FB account
 // *****************************************************************************
-const getUserID = (fb_account, callback) => {
-  const token = hashFBAccount(fb_account);
+const getUserID = (fb_account) => {
+  return new Promise((resolve, reject) => {
+    const token = hashFBAccount(fb_account);
 
-  console.log(token);
+    console.log(token);
 
-  let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
+    let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
 
-  db.query(sql, (error, results) => {
-    let value = null;
-    if (results.length > 0) {
-      value = results[0].id;
-    }
-    callback(error, value);
+    db.query(sql).then((results) => {
+      let value = null;
+      if (results.length > 0) {
+        value = results[0].id;
+      }
+      resolve(value);
+    }).catch((error) => {
+      reject(error);
+    });
+
   });
 };
 
 // *****************************************************************************
 // Check if an FB account is already registered in DB
 // *****************************************************************************
-const isFBAccountRegistered = (fb_account, callback) => {
-  const token = hashFBAccount(fb_account);
+const isFBAccountRegistered = (fb_account) => {
+  return new Promise((resolve, reject) => {
+    const token = hashFBAccount(fb_account);
 
-  let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
+    let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
 
-  db.query(sql, (error, results) => {
-    let value = results.length > 0;
-    callback(error, value);
+    db.query(sql).then((results) => {
+      let value = results.length > 0;
+      resolve(value);
+    }).catch((error) => {
+      reject(error);
+    });
+
   });
 };
 
 // *****************************************************************************
 // Check if the username is already registered
 // *****************************************************************************
-const isUsernameRegistered = (username, callback) => {
-  let sql = `SELECT id FROM user_account WHERE username='${username}'`;
+const isUsernameRegistered = (username) => {
+  return new Promise((resolve, reject) => {
+    let sql = `SELECT id FROM user_account WHERE username='${username}'`;
 
-  db.query(sql, (error, results) => {
-    let value = results.length > 0;
-    callback(error, value);
+    db.query(sql).then((results) => {
+      let value = results.length > 0;
+      resolve(value);
+    }).catch((error) => {
+      reject(error);
+    });
+
   });
 };
 
 // *****************************************************************************
 // Register a new user using Facebook
 // *****************************************************************************
-const registerWithFB = (fb_account, user_name, callback) => {
-  const token = hashFBAccount(fb_account);
+const registerWithFB = (fb_account, user_name) => {
+  return new Promise((resolve, reject) => {
+    const token = hashFBAccount(fb_account);
 
-  let sql = '';
-  sql += `INSERT INTO user_account(username, account_link, access_token, signup_date) `;
-  sql += `VALUES('${user_name}', '${token}', NULL, CURRENT_TIMESTAMP)`;
+    let sql = '';
+    sql += `INSERT INTO user_account(username, account_link, access_token, signup_date) `;
+    sql += `VALUES('${user_name}', '${token}', NULL, CURRENT_TIMESTAMP)`;
 
-  db.query(sql, (error, results) => {
-    let value = results.affectedRows === 1;
-    callback(error, value);
+    db.query(sql).then((results) => {
+      let value = results.affectedRows === 1;
+      resolve(value);
+    }).catch((error) => {
+      reject(error);
+    });
+
   });
 };
 
 // *****************************************************************************
 // Validate an FB access token with FB
 // *****************************************************************************
-const isValidFBToken = (token, user_id, callback) => {
-  const fbUrl = `https://graph.facebook.com/debug_token`;
+const isValidFBToken = (token, user_id) => {
+  return new Promise((resolve, reject) => {
+    const fbUrl = `https://graph.facebook.com/debug_token`;
 
-  const inputToken = `input_token=${token}`;
-  const accessToken = `access_token=${settings.fb_appid}|${settings.fb_apps}`;
+    const inputToken = `input_token=${token}`;
+    const accessToken = `access_token=${settings.fb_appid}|${settings.fb_apps}`;
 
-  https.get(`${fbUrl}?${inputToken}&${accessToken}`, (res) => {
-    let body = '';
-    res.on('data', (data) => {
-      body += data;
+    https.get(`${fbUrl}?${inputToken}&${accessToken}`, (res) => {
+      let body = '';
+      res.on('data', (data) => {
+        body += data;
+      });
+      res.on('end', () => {
+        const response = JSON.parse(body);
+
+        if (response.data.app_id === settings.fb_appid &&
+            response.data.user_id === user_id &&
+            response.data.is_valid === true) {
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      });
     });
-    res.on('end', () => {
-      const response = JSON.parse(body);
 
-      if (response.data.app_id === settings.fb_appid &&
-          response.data.user_id === user_id &&
-          response.data.is_valid === true) {
-        callback(true);
-      } else {
-        callback(false);
-      }
-    });
   });
 };
 
 
 module.exports = {
 
-  login: (fb_account, auth_token, callback) => {
-    // verify from Facebook that this is a valid access token for this user
-    isValidFBToken(auth_token, fb_account, (valid) => {
-      if (valid) {
-        isFBAccountRegistered(fb_account, (error, exists) => {
-          if (error) {
-            throw error;
-          }
+  login: (fb_account, auth_token) => {
+    return new Promise((resolve, reject) => {
+      // verify from Facebook that this is a valid access token for this user
+      isValidFBToken(auth_token, fb_account).then((valid) => {
+        if (!valid) {
+          reject("Invalid access token");
+        }
 
+        isFBAccountRegistered(fb_account).then((exists) => {
           // if account exists, try to login
-          if (exists) {
-            getUserID(fb_account, (error, user_id) => {
-              if (user_id !== null) {
-                const access_token = user.generateAccessToken();
-
-                user.updateAccessToken(user_id, access_token, (error, response) => {
-                  if (!error && response) {
-                    callback({error: false, message: "OK", user_id: user_id, token: access_token});
-                  } else {
-                    callback({error: true, message: "Cannot update access token"});
-                  }
-                });
-
-              } else {
-                callback({error: true, message: "User ID not found"});
-              }
-            });
-          } else {
-            callback({error: true, message: "Account doesn't exist"});
+          if (!exists) {
+            reject("Account doesn't exist");
           }
+
+          getUserID(fb_account).then((user_id) => {
+            if (user_id === null) {
+              reject("User ID not found");
+            }
+
+            const access_token = user.generateAccessToken();
+
+            user.updateAccessToken(user_id, access_token).then((response) => {
+              if (response) {
+                resolve({user_id: user_id, token: access_token});
+              } else {
+                reject("Cannot update access token");
+              }
+            }).catch((error) => {
+              reject(error);
+            });
+
+          }).catch((error) => {
+            reject(error);
+          });
+
+        }).catch((error) => {
+          reject(error);
         });
 
-      } else {
-        callback({error: true, message: "Invalid access token"});
-      }
+      }).catch((error) => {
+        reject(error);
+      });
+
     });
   },
 
-  register: (fb_account, auth_token, user_name, callback) => {
-    // first check for valid FB token
-    isValidFBToken(auth_token, fb_account, (valid) => {
-      if (valid) {
+  register: (fb_account, auth_token, user_name) => {
+    return new Promise((resolve, reject) => {
+      // first check for valid FB token
+      isValidFBToken(auth_token, fb_account).then((valid) => {
+        if (!valid) {
+          reject("Invalid access token");
+        }
+
         // check if the account already exists
-        isFBAccountRegistered(fb_account, (error, exists) => {
-          if (error) {
-            throw error;
+        isFBAccountRegistered(fb_account).then((exists) => {
+          // if not, try to register
+          if (exists) {
+            reject("Account already exists");
           }
 
-          // if not, try to register
-          if (!exists) {
+          // check if the username already exists
+          isUsernameRegistered(user_name).then((username_exists) => {
+            // if not, try to register
+            if (username_exists) {
+              reject("Username already exists");
+            }
 
-            // check if the username already exists
-            isUsernameRegistered(user_name, (error, username_exists) => {
-              if (error) {
-                throw error;
+            registerWithFB(fb_account, user_name).then((result) => {
+              // if registering worked, try to login
+              if (!result) {
+                reject("Registering failed");
               }
 
-              // if not, try to register
-              if (!username_exists) {
-                registerWithFB(fb_account, user_name, (error, result) => {
-                  if (error) {
-                    throw error;
-                  }
+              getUserID(fb_account, (error, user_id) => {
+                if (user_id === null) {
+                  reject("User ID not found");
+                }
 
-                  // if registering worked, try to login
-                  if (result) {
-                    getUserID(fb_account, (error, user_id) => {
-                      if (user_id !== null) {
-                        const access_token = user.generateAccessToken();
-
-                        user.updateAccessToken(user_id, access_token, (error, response) => {
-                          if (!error && response) {
-                            callback({error: false, message: "OK", user_id: user_id, token: access_token});
-                          } else {
-                            callback({error: true, message: "Cannot update access token"});
-                          }
-                        });
-
-                      } else {
-                        callback({error: true, message: "User ID not found"});
-                      }
-                    });
+                const access_token = user.generateAccessToken();
+                user.updateAccessToken(user_id, access_token).then((response) => {
+                  if (response) {
+                    resolve({user_id: user_id, token: access_token});
                   } else {
-                    callback({error: true, message: "Registering failed"});
+                    reject("Cannot update access token");
                   }
+                }).catch((error) => {
+                  reject(error);
                 });
 
-              } else {
-                callback({error: true, message: "Username already exists"});
-              }
+              }).catch((error) => {
+                reject(error);
+              });
+
+            }).catch((error) => {
+              reject(error);
             });
 
-          } else {
-            callback({error: true, message: "Account already exists"});
-          }
-        });
-      } else {
-        callback({error: true, message: "Invalid access token"});
-      }
-    });
-  }
+          }).catch((error) => {
+            reject(error);
+          });
 
+        }).catch((error) => {
+          reject(error);
+        });
+
+      });
+    });
+  },
 };

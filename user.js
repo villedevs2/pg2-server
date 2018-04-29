@@ -59,40 +59,52 @@ module.exports = {
   // ***************************************************************************
   // Update the access token for a given user ID
   // ***************************************************************************
-  updateAccessToken: (user_id, access_token, callback) => {
-    let sql = `UPDATE user_account SET access_token='${access_token}' WHERE id='${user_id}'`;
+  updateAccessToken: (user_id, access_token) => {
+    return new Promise((resolve, reject) => {
+      let sql = `UPDATE user_account SET access_token='${access_token}' WHERE id='${user_id}'`;
 
-    db.query(sql, (error, results) => {
-      let value = results.changedRows === 1;
-      callback(error, value);
+      db.query(sql, (error, results) => {
+        if (error) {
+          reject(error);
+        }
+
+        let value = results.changedRows === 1;
+        resolve(value);
+      });
     });
+
   },
 
   // ***************************************************************************
   // Gets info for a user with User ID and Access Token
   // ***************************************************************************
-  getInfo: (user_id, access_token, callback) => {
-    let sql = `SELECT username, access_token, signup_date, image `;
-    sql +=    `FROM user_account WHERE id='${user_id}'`;
+  getInfo: (user_id, access_token) => {
+    return new Promise((resolve, reject) => {
+      let sql = `SELECT username, access_token, signup_date, image `;
+      sql +=    `FROM user_account WHERE id='${user_id}'`;
 
-    db.query(sql, (error, results) => {
-      if (results.length === 1) {
-        if (results[0].access_token === access_token) {
-          const response = {
-            error: false,
-            message: 'OK',
-            username: results[0].username,
-            image: results[0].image,
-            signup_date: results[0].signup_date
-          };
-          callback(error, response);
-        } else {
-          callback(error, {error: true, message: "Wrong access token"});
+      db.query(sql).then((results) => {
+        if (results.length !== 1) {
+          reject("Database error");
         }
-      } else {
-        callback(error, {error: true, message: "Database error"});
-      }
+        if (results[0].access_token !== access_token) {
+          reject("Wrong access token");
+        }
+
+        const response = {
+          error: false,
+          message: 'OK',
+          username: results[0].username,
+          image: results[0].image,
+          signup_date: results[0].signup_date
+        };
+
+        resolve(response);
+      }).catch((error) => {
+        reject(error);
+      });
     });
+
   },
 };
 

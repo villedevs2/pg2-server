@@ -21,63 +21,67 @@ module.exports = {
   },
 
   // Simple SQL query
-  query: (query_string, callback) => {
-    pool.getConnection((error, connection) => {
-      if (error) {
-        console.log(error);
-        return callback(error);
-      }
-      connection.query(query_string, (error, results) => {
-        connection.release();
+  query: (query_string) => {
+    return new Promise((resolve, reject) => {
+      pool.getConnection((error, connection) => {
         if (error) {
-          console.log(error);
-          return callback(error);
+          reject(error);
         }
-        callback(null, results);
+        connection.query(query_string, (error, results) => {
+          connection.release();
+
+          if (error) {
+            reject(error);
+          }
+
+          resolve(results);
+        });
       });
     });
   },
   // Transaction of multiple queries. All must succeed for commit.
-  transaction: (query_strings, callback) => {
-    pool.getConnection((error, connection) => {
-      if (error) {
-        console.log(error);
-        return callback(error);
-      }
-
-      connection.beginTransaction((error) => {
+  transaction: (query_strings) => {
+    return new Promise((resolve, reject) => {
+      pool.getConnection((error, connection) => {
         if (error) {
-          throw error;
+          reject(error);
         }
 
-        transaction_fail = false;
-        transaction_results = '';
-        query_strings.forEach((query_string) => {
-          connection.query(query_string, (error, results) => {
-            if (error || results.length <= 0) {
-              console.log(error);
-              transaction_results += results;
-              connection.rollback(() => {
-                throw error;
-                transaction_fail = true;
-              });
-            }
+        connection.beginTransaction((error) => {
+          if (error) {
+            reject(error);
+          }
+
+          transaction_fail = false;
+          transaction_results = '';
+          query_strings.forEach((query_string) => {
+            connection.query(query_string, (error, results) => {
+              if (error || results.length <= 0) {
+                console.log(error);
+                transaction_results += results;
+                connection.rollback(() => {
+                  throw error;
+                  transaction_fail = true;
+                });
+              }
+            });
           });
+
+          if (!transaction_fail) {
+            connection.commit((error) => {
+              if (error) {
+                connection.rollback(() => {
+                  reject(error);
+                })
+              }
+              connection.release();
+              resolve(transaction_results);
+            });
+          } else {
+            reject("Transaction failed");
+          }
         });
 
-        if (!transaction_fail) {
-          connection.commit((error) => {
-            if (error) {
-              connection.rollback(() => {
-                throw error;
-              })
-            }
-            connection.release();
-            callback(null, transaction_results);
-          });
-        } else {
-          return callback("Transaction failed");
-        }
       });
     });
   }

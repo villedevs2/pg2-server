@@ -22,33 +22,35 @@ const parseStockData = (json, market) => {
 };
 
 module.exports = {
-  fetchStockData: (companies, market, callback) => {
-    let symbols_list = '';
-    for (let i=0; i < companies.length; i++) {
-      symbols_list += companies[i].symbol;
-      if (i !== companies.length-1) {
-        symbols_list += ',';
+  fetchStockData: (companies, market) => {
+    return new Promise((resolve, reject) => {
+      let symbols_list = '';
+      for (let i=0; i < companies.length; i++) {
+        symbols_list += companies[i].symbol;
+        if (i !== companies.length-1) {
+          symbols_list += ',';
+        }
       }
-    }
 
-    https.get(`${apiUrl}function=BATCH_STOCK_QUOTES&symbols=${symbols_list}&apikey=${settings.alphavantage_apikey}`, (res) => {
-      let body = '';
-      res.on('data', (data) => {
-        body += data;
-      });
-      res.on('end', () => {
-        const stock_entries = parseStockData(JSON.parse(body), market);
-
-        stock_entries.forEach((stock, index) => {
-          for (let j=0; j < companies.length; j++) {
-            if (companies[j].symbol === stock.symbol) {
-              stock_entries[index]['company'] = companies[j].name;
-              break;
-            }
-          }
+      https.get(`${apiUrl}function=BATCH_STOCK_QUOTES&symbols=${symbols_list}&apikey=${settings.alphavantage_apikey}`, (res) => {
+        let body = '';
+        res.on('data', (data) => {
+          body += data;
         });
+        res.on('end', () => {
+          const stock_entries = parseStockData(JSON.parse(body), market);
 
-        callback(stock_entries);
+          stock_entries.forEach((stock, index) => {
+            for (let j=0; j < companies.length; j++) {
+              if (companies[j].symbol === stock.symbol) {
+                stock_entries[index]['company'] = companies[j].name;
+                break;
+              }
+            }
+          });
+
+          resolve(stock_entries);
+        });
       });
     });
   },
