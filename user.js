@@ -63,13 +63,10 @@ module.exports = {
     return new Promise((resolve, reject) => {
       let sql = `UPDATE user_account SET access_token='${access_token}' WHERE id='${user_id}'`;
 
-      db.query(sql, (error, results) => {
-        if (error) {
-          reject(error);
-        }
-
-        let value = results.changedRows === 1;
-        resolve(value);
+      db.query(sql).then((results) => {
+        resolve(results.changedRows === 1);
+      }).catch((error) => {
+        reject(error);
       });
     });
 

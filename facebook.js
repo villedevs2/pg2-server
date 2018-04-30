@@ -208,7 +208,7 @@ module.exports = {
                 reject("Registering failed");
               }
 
-              getUserID(fb_account, (error, user_id) => {
+              getUserID(fb_account).then((user_id) => {
                 if (user_id === null) {
                   reject("User ID not found");
                 }
@@ -240,7 +240,10 @@ module.exports = {
           reject(error);
         });
 
+      }).catch((error) => {
+        reject(error);
       });
+
     });
   },
 };
