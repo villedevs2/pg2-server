@@ -6,14 +6,14 @@ const getMarketID = (market, url) => {
   return new Promise((resolve, reject) => {
     let sql = `SELECT id FROM stock_market WHERE shortname='${market}'`;
 
-    db.query(sql, (error, results) => {
-      if (error) {
-        reject(`getMarketID database error`);
-      } else if (results.length !== 1) {
+    db.query(sql).then((results) => {
+      if (results.length !== 1) {
         reject(`getMarketID not found`);
       } else {
         resolve({id: results[0].id, url: url});
       }
+    }).catch((error) => {
+      reject(error);
     });
   });
 };
@@ -22,12 +22,10 @@ const isStockInDB = (symbol, market_id) => {
   return new Promise((resolve, reject) => {
     let sql = `SELECT id FROM stock WHERE symbol='${symbol}' AND market_id='${market_id}'`;
 
-    db.query(sql, (error, results) => {
-      if (error) {
-        reject(`isStockInDB database error`);
-      } else {
-        resolve(results.length === 1);
-      }
+    db.query(sql).then((results) => {
+      resolve(results.length === 1);
+    }).catch((error) => {
+      reject(error);
     });
 
   });
@@ -38,13 +36,11 @@ const insertStockToDatabase = (stock) => {
     let sql = `INSERT INTO stock(market_id, symbol, full_name, price, variety, update_date)`;
     sql += `VALUES('${stock.market_id}', '${stock.symbol}', '${stock.fullname}', '${stock.price}', '${stock.change}', CURRENT_TIMESTAMP)`;
 
-    db.query(sql, (error, results) => {
-      if (error) {
-        reject(`insertStockToDatabase database error`);
-      } else {
-        // this operation should affect exactly one row if it succeeds
-        resolve(results.affectedRows === 1);
-      }
+    db.query(sql).then((results) => {
+      // this operation should affect exactly one row if it succeeds
+      resolve(results.affectedRows === 1);
+    }).catch((error) => {
+      reject(error);
     });
   });
 };
@@ -55,13 +51,11 @@ const updateStockInDatabase = (stock) =>  {
     sql += `SET price='${stock.price}', variety='${stock.change}', update_date=CURRENT_TIMESTAMP `;
     sql += `WHERE symbol='${stock.symbol}' AND market_id='${stock.market_id}'`;
 
-    db.query(sql, (error, results) => {
-      if (error) {
-        reject(`updateStockInDatabase database error`);
-      } else {
-        // this operation should affect exactly one row if it succeeds
-        resolve(results.affectedRows === 1);
-      }
+    db.query(sql).then((results) => {
+      // this operation should affect exactly one row if it succeeds
+      resolve(results.affectedRows === 1);
+    }).catch((error) => {
+      reject(error);
     });
   });
 };

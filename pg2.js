@@ -6,6 +6,7 @@ const https = require('https');
 const db = require('./database');
 const facebook = require('./facebook');
 const user = require('./user');
+const game = require('./game');
 
 const settings = require('./settings.json');
 
@@ -205,6 +206,46 @@ app.post('/userinfo', (req, res) => {
       } else {
         writeJSON(res, {error: true, message: "Invalid access token"});
       }
+    } else {
+      writeJSON(res, {error: true, message: "Invalid parameters"});
+    }
+  });
+});
+
+// *****************************************************************************
+// POST /gameinfo
+// *****************************************************************************
+app.post('/gameinfo', (req, res) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(req, (error, fields, files) => {
+    const game_id = fields.game_id;
+
+    if (game_id !== undefined) {
+      game.getGameInfo(game_id).then((results) => {
+        writeJSON(res, {error: false, game: results});
+      }).catch((error) => {
+        writeJSON(res, {error: true, message: error});
+      });
+    } else {
+      writeJSON(res, {error: true, message: "Invalid parameters"});
+    }
+  });
+});
+
+
+app.post('/stocklist', (req, res) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(req, (error, fields, files) => {
+    const market_id = fields.market_id;
+
+    if (market_id !== undefined) {
+      game.getStockList(market_id).then((results) => {
+        writeJSON(res, {error: false, stock: results});
+      }).catch((error) => {
+        writeJSON(res, {error: true, message: error});
+      });
     } else {
       writeJSON(res, {error: true, message: "Invalid parameters"});
     }
