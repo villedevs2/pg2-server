@@ -10,15 +10,7 @@ module.exports = {
         if (results.length !== 1) {
           reject(`getGameInfo game id not found`);
         } else {
-          let info = {
-            error: false,
-            name: results[0].name,
-            description: results[0].description,
-            start_time: results[0].start_time,
-            end_time: results[0].end_time
-          };
-
-          resolve(info);
+          resolve(results);
         }
       }).catch((error) => {
         reject(error);
