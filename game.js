@@ -30,4 +30,10 @@ module.exports = {
       });
     });
   },
+
+  getLeaderboard: (game_id) => {
+    return new Promise((resolve, reject) => {
+
+    });
+  },
 };
