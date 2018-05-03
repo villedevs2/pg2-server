@@ -135,7 +135,37 @@ const isValidFBToken = (token, user_id) => {
 module.exports = {
 
   login: (fb_account, auth_token) => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+
+      try {
+        const token_valid = await isValidFBToken(auth_token, fb_account);
+        if (!token_valid) {
+          throw "Invalid access token";
+        }
+
+        const account_exists = await isFBAccountRegistered(fb_account);
+        if (!account_exists) {
+          throw "Account doesn't exist";
+        }
+
+        const user_id = await getUserID(fb_account);
+        if (user_id === null) {
+          throw "User ID not found";
+        }
+
+        const access_token = user.generateAccessToken();
+
+        const update_ok = await user.updateAccessToken(user_id, access_token);
+        if (!update_ok) {
+          throw "Cannot update access token";
+        }
+
+        resolve({user_id: user_id, token: access_token});
+      } catch(error) {
+        reject(error);
+      }
+
+      /*
       // verify from Facebook that this is a valid access token for this user
       isValidFBToken(auth_token, fb_account).then((valid) => {
         if (!valid) {
@@ -176,12 +206,52 @@ module.exports = {
       }).catch((error) => {
         reject(error);
       });
+      */
 
     });
   },
 
   register: (fb_account, auth_token, user_name) => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // first check for valid FB token
+        const token_valid = await isValidFBToken(auth_token, fb_account);
+        if (!token_valid) {
+          throw "Invalid access token";
+        }
+        // check if the account already exists
+        const account_exists = await isFBAccountRegistered(fb_account);
+        if (account_exists) {
+          throw "Account already exists";
+        }
+        // check if the username already exists
+        const username_exists = await isUsernameRegistered(user_name);
+        if (username_exists) {
+          throw "Username already exists";
+        }
+        // try register
+        const reg_ok = await registerWithFB(fb_account, user_name);
+        if (!reg_ok) {
+          throw "Registering failed"
+        }
+
+        const user_id = await getUserID(fb_account);
+        if (user_id === null) {
+          throw "User ID not found";
+        }
+
+        const access_token = user.generateAccessToken();
+        const update_ok = await user.updateAccessToken(user_id, access_token);
+        if (!update_ok) {
+          throw "Cannot update access token";
+        }
+
+        resolve({user_id: user_id, token: access_token});
+      } catch (error) {
+        reject(error);
+      }
+
+/*
       // first check for valid FB token
       isValidFBToken(auth_token, fb_account).then((valid) => {
         if (!valid) {
@@ -243,7 +313,7 @@ module.exports = {
       }).catch((error) => {
         reject(error);
       });
-
+*/
     });
   },
 };
