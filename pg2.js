@@ -98,6 +98,7 @@ const doesUsernameExist = (username) => {
 };
 
 // POST on /register
+// TODO: needs rewrite/removal
 app.post('/register', (req, res) => {
   const form = formidable.IncomingForm();
 

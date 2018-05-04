@@ -23,22 +23,23 @@ const hashFBAccount = (fb_account) => {
 // Get a user ID for a given FB account
 // *****************************************************************************
 const getUserID = (fb_account) => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const token = hashFBAccount(fb_account);
 
     console.log(token);
 
     let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
 
-    db.query(sql).then((results) => {
+    try {
+      const results = await db.query(sql);
       let value = null;
       if (results.length > 0) {
         value = results[0].id;
       }
       resolve(value);
-    }).catch((error) => {
+    } catch (error) {
       reject(error);
-    });
+    }
 
   });
 };
@@ -47,17 +48,17 @@ const getUserID = (fb_account) => {
 // Check if an FB account is already registered in DB
 // *****************************************************************************
 const isFBAccountRegistered = (fb_account) => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const token = hashFBAccount(fb_account);
 
     let sql = `SELECT id FROM user_account WHERE account_link='${token}'`;
 
-    db.query(sql).then((results) => {
-      let value = results.length > 0;
-      resolve(value);
-    }).catch((error) => {
+    try {
+      const results = await db.query(sql);
+      resolve(results.length > 0);
+    } catch (error) {
       reject(error);
-    });
+    }
 
   });
 };
@@ -66,15 +67,15 @@ const isFBAccountRegistered = (fb_account) => {
 // Check if the username is already registered
 // *****************************************************************************
 const isUsernameRegistered = (username) => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     let sql = `SELECT id FROM user_account WHERE username='${username}'`;
 
-    db.query(sql).then((results) => {
-      let value = results.length > 0;
-      resolve(value);
-    }).catch((error) => {
+    try {
+      const results = await db.query(sql);
+      resolve(results.length > 0);
+    } catch (error) {
       reject(error);
-    });
+    }
 
   });
 };
@@ -83,19 +84,19 @@ const isUsernameRegistered = (username) => {
 // Register a new user using Facebook
 // *****************************************************************************
 const registerWithFB = (fb_account, user_name) => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const token = hashFBAccount(fb_account);
 
     let sql = '';
     sql += `INSERT INTO user_account(username, account_link, access_token, signup_date) `;
     sql += `VALUES('${user_name}', '${token}', NULL, CURRENT_TIMESTAMP)`;
 
-    db.query(sql).then((results) => {
-      let value = results.affectedRows === 1;
-      resolve(value);
-    }).catch((error) => {
+    try {
+      const results = await db.query(sql);
+      resolve(results.affectedRows === 1);
+    } catch (error) {
       reject(error);
-    });
+    }
 
   });
 };
