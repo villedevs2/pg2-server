@@ -40,6 +40,7 @@ module.exports = {
     });
   },
   // Transaction of multiple queries. All must succeed for commit.
+  // TODO: still a mess
   transaction: (query_strings) => {
     return new Promise((resolve, reject) => {
       pool.getConnection((error, connection) => {

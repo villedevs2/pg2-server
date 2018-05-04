@@ -137,118 +137,136 @@ app.post('/register', (req, res) => {
 // *****************************************************************************
 // POST on /fblogin: login via facebook
 // *****************************************************************************
-app.post('/fblogin', (req, res) => {
+app.post('/fblogin', (request, response) => {
   const form = new formidable.IncomingForm();
 
-  form.parse(req, (err, fields, files) => {
-    const user_id = fields.user_id;
+  form.parse(request, async (error, fields, files) => {
+    const fb_account = fields.fb_account;
     const auth_token = fields.auth_token;
-    console.log(`user id = ${user_id}`);
+    console.log(`fb account = ${fb_account}`);
     console.log(`auth token = ${auth_token}`);
 
-    facebook.login(user_id, auth_token).then((result) => {
-      writeJSON(res, result);
-    }).catch((error) => {
-      writeJSON(res, {error: true, message: error});
-    });
+    let result_json;
+    try {
+      const login_result = await facebook.login(fb_account, auth_token);
 
+      result_json = {error: false, result: login_result};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
   });
 });
 
 // *****************************************************************************
 // POST on /fbregister: register via facebook
 // *****************************************************************************
-app.post('/fbregister', (req, res) => {
+app.post('/fbregister', (request, response) => {
   const form = new formidable.IncomingForm();
 
-  form.parse(req, (err, fields, files) => {
-    const user_id = fields.user_id;
+  form.parse(request, async (error, fields, files) => {
+    const fb_account = fields.fb_account;
     const auth_token = fields.auth_token;
     const user_name = fields.user_name;
 
+    // TODO: more info?
 
-    // TODO: more info
+    let result_json;
+    try {
+      if (fb_account === undefined || auth_token === undefined || user_name === undefined) {
+        throw "Invalid parameters";
+      }
 
-    if (user_id !== undefined && auth_token !== undefined && user_name !== undefined) {
+      const reg_result = await facebook.register(fb_account, auth_token, user_name);
 
-      facebook.register(user_id, auth_token, user_name).then((result) => {
-        writeJSON(res, result);
-      }).catch((error) => {
-        writeJSON(res, {error: true, message: error});
-      });
-
-    } else {
-      writeJSON(res, {message: "Invalid parameters", error: true});
+      result_json = {error: false, result: reg_result};
+    } catch (error) {
+      result_json = {error: true, message: error};
     }
 
+    writeJSON(response, result_json);
   });
 });
 
 // *****************************************************************************
 // POST on /userinfo: get user information
 // *****************************************************************************
-app.post('/userinfo', (req, res) => {
+app.post('/userinfo', (request, response) => {
   const form = new formidable.IncomingForm();
 
-  form.parse(req, (err, fields, files) => {
-    const user_id = fields.user_id;
+  form.parse(request, async (error, fields, files) => {
     const access_token = fields.token;
 
-    if (user_id !== undefined && access_token !== undefined) {
-      if (user.validateAccessToken(access_token)) {
-
-        user.getInfo(user_id, access_token).then((result) => {
-          writeJSON(res, result);
-        }).catch((error) => {
-          writeJSON(res, {error: true, message: error});
-        });
-
-      } else {
-        writeJSON(res, {error: true, message: "Invalid access token"});
+    let result_json;
+    try {
+      if (access_token === undefined) {
+        throw "Invalid parameters";
       }
-    } else {
-      writeJSON(res, {error: true, message: "Invalid parameters"});
+
+      const token_info = user.validateAccessToken(access_token);
+      if (token_info.valid !== true) {
+        throw "Invalid access token";
+      }
+
+      const user_info = await user.getInfo(token_info.user_id, access_token);
+
+      result_json = {error: false, info: user_info};
+    } catch (error) {
+      result_json = {error: true, message: error};
     }
+
+    writeJSON(response, result_json);
   });
 });
 
 // *****************************************************************************
 // POST /gameinfo
 // *****************************************************************************
-app.post('/gameinfo', (req, res) => {
+app.post('/gameinfo', (request, response) => {
   const form = new formidable.IncomingForm();
 
-  form.parse(req, (error, fields, files) => {
+  form.parse(request, async (error, fields, files) => {
     const game_id = fields.game_id;
 
-    if (game_id !== undefined) {
-      game.getGameInfo(game_id).then((results) => {
-        writeJSON(res, {error: false, game: results});
-      }).catch((error) => {
-        writeJSON(res, {error: true, message: error});
-      });
-    } else {
-      writeJSON(res, {error: true, message: "Invalid parameters"});
+    let result_json;
+    try {
+      if (game_id === undefined) {
+        throw "Invalid parameters";
+      }
+
+      const game_info = await game.getGameInfo(game_id);
+
+      result_json = {error: false, info: game_info};
+    } catch (error) {
+      result_json = {error: true, message: error};
     }
+
+    writeJSON(response, result_json);
   });
 });
 
 
-app.post('/stocklist', (req, res) => {
+app.post('/stocklist', (request, response) => {
   const form = new formidable.IncomingForm();
 
-  form.parse(req, (error, fields, files) => {
+  form.parse(request, async (error, fields, files) => {
     const market_id = fields.market_id;
 
-    if (market_id !== undefined) {
-      game.getStockList(market_id).then((results) => {
-        writeJSON(res, {error: false, stock: results});
-      }).catch((error) => {
-        writeJSON(res, {error: true, message: error});
-      });
-    } else {
-      writeJSON(res, {error: true, message: "Invalid parameters"});
+    let result_json;
+    try {
+      if (market_id === undefined) {
+        throw "Invalid parameters";
+      }
+
+      const stock_list = await game.getStockList(market_id);
+
+      result_json = {error: false, stock_list: stock_list};
+    } catch (error) {
+      result_json = {error: true, message: error};
     }
+
+    writeJSON(response, result_json);
   });
 });
 

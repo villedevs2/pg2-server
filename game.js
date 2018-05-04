@@ -2,32 +2,33 @@ const db = require('./database');
 
 module.exports = {
   getGameInfo: (game_id) => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       let sql = `SELECT name, description, start_time, end_time `;
       sql += `FROM game WHERE id='${game_id}'`;
 
-      db.query(sql).then((results) => {
+      try {
+        const results = await db.query(sql);
         if (results.length !== 1) {
-          reject(`getGameInfo game id not found`);
-        } else {
-          resolve(results);
+          throw "getGameInfo game id not found";
         }
-      }).catch((error) => {
+        resolve(results);
+      } catch (error) {
         reject(error);
-      });
+      }
     });
   },
 
   getStockList: (market_id) => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       let sql = `SELECT symbol, full_name, price, variety, update_date `;
       sql += `FROM stock WHERE market_id='${market_id}'`;
 
-      db.query(sql).then((results) => {
+      try {
+        const results = await db.query(sql);
         resolve(results);
-      }).catch((error) => {
+      } catch (error) {
         reject(error);
-      });
+      }
     });
   },
 

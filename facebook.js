@@ -153,15 +153,15 @@ module.exports = {
           throw "User ID not found";
         }
 
-        const access_token = user.generateAccessToken();
+        const access_token = user.generateAccessToken(user_id);
 
         const update_ok = await user.updateAccessToken(user_id, access_token);
         if (!update_ok) {
           throw "Cannot update access token";
         }
 
-        resolve({user_id: user_id, token: access_token});
-      } catch(error) {
+        resolve({token: access_token});
+      } catch (error) {
         reject(error);
       }
 
@@ -234,19 +234,21 @@ module.exports = {
         if (!reg_ok) {
           throw "Registering failed"
         }
-
+        // get user id for the new account
         const user_id = await getUserID(fb_account);
         if (user_id === null) {
           throw "User ID not found";
         }
 
-        const access_token = user.generateAccessToken();
+        // try to update the access token
+        const access_token = user.generateAccessToken(user_id);
         const update_ok = await user.updateAccessToken(user_id, access_token);
         if (!update_ok) {
           throw "Cannot update access token";
         }
 
-        resolve({user_id: user_id, token: access_token});
+        // all ok!
+        resolve({token: access_token});
       } catch (error) {
         reject(error);
       }
