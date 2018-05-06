@@ -40,8 +40,7 @@ module.exports = {
     });
   },
   // Transaction of multiple queries. All must succeed for commit.
-  // TODO: still a mess
-  transaction: (query_strings) => {
+  transaction: (query1, query2, affect1, affect2) => {
     return new Promise((resolve, reject) => {
       pool.getConnection((error, connection) => {
         if (error) {
@@ -49,41 +48,91 @@ module.exports = {
         }
 
         connection.beginTransaction((error) => {
-          if (error) {
-            reject(error);
-          }
-
-          transaction_fail = false;
-          transaction_results = '';
-          query_strings.forEach((query_string) => {
-            connection.query(query_string, (error, results) => {
-              if (error || results.length <= 0) {
-                console.log(error);
-                transaction_results += results;
+          connection.query(query1, (error1, results1) => {
+            connection.query(query2, (error2, results2) => {
+              if (error1 || error2 ||
+                  results1 === undefined || results2 === undefined ||
+                  results1.affectedRows !== affect1 || results2.affectedRows !== affect2) {
                 connection.rollback(() => {
-                  throw error;
-                  transaction_fail = true;
+                  reject("Transaction fail");
                 });
               }
-            });
-          });
 
-          if (!transaction_fail) {
+              connection.commit((error) => {
+                if (error) {
+                  connection.rollback(() => {
+                    reject("Transaction fail");
+                  });
+                }
+                connection.release();
+                resolve("OK");
+              });
+            });
+          })
+        });
+      });
+    });
+  },
+}
+/*
+  transaction: (query_strings) => {
+    return new Promise((resolve, reject) => {
+      pool.getConnection((error, connection) => {
+        if (error) {
+          reject(error);
+        }
+
+        try {
+          connection.beginTransaction((error) => {
+            if (error) {
+              throw error;
+            }
+
+            let transaction_results = [];
+            let transaction_fail = false;
+            for (let i=0; i < query_strings.length; i++) {
+              connection.query(query_strings[i], (error, results) => {
+                if (error || results === undefined || results.length <= 0) {
+                  transaction_fail = true;
+                }
+                console.log(results);
+                transaction_results.push(results);
+              });
+            }
+
+            transaction_results.forEach((result) => {
+              console.log(result);
+              if (result === undefined || result.affectedRows === 0) {
+                transaction_fail = true;
+              }
+            });
+
+            console.log(transaction_fail);
+
+            if (transaction_fail) {
+              connection.rollback(() => {
+                throw new Error("Transaction fail");
+              });
+            }
+
+            console.log(transaction_results);
             connection.commit((error) => {
               if (error) {
                 connection.rollback(() => {
-                  reject(error);
-                })
+                  throw new Error("Transaction error");
+                });
               }
               connection.release();
               resolve(transaction_results);
             });
-          } else {
-            reject("Transaction failed");
-          }
-        });
+          });
+        } catch(error) {
+          console.log("transaction error");
+          reject(error);
+        }
 
       });
     });
   }
 };
+*/

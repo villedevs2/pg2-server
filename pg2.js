@@ -61,53 +61,43 @@ const writeJSON = (res, json) => {
 
 
 // POST on /login
-app.post('/login', (req, res) => {
+app.post('/login', (request, response) => {
 
   const form = formidable.IncomingForm();
-  form.parse(req, (error, fields, files) => {
+  form.parse(request, async (error, fields, files) => {
     const username = fields.username;
     const password = fields.password;
 
-    console.log(fields);
-    console.log(username);
-    console.log(password);
+    try {
+      const results = await user.loginWithPass(username, password);
 
-    const json = {
-      username: username,
-      password: password
-    };
-
-    res.writeHead(200, {'Content-Type': 'text/json'});
-    res.write(JSON.stringify(json));
-    return res.end();
+      writeJSON(response, {error: false, result: results});
+    } catch (error) {
+      writeJSON(response, {error: true, message: error});
+    }
   });
 
 });
 
-const doesUsernameExist = (username) => {
-  return new Promise((resolve, reject) => {
-    db.query(`SELECT id FROM user_account WHERE username='${username}'`, (error, results) => {
-      if (error) {
-        reject(error);
-      }
-
-      let value = results.length > 0;
-      resolve(value);
-    });
-  });
-};
-
 // POST on /register
 // TODO: needs rewrite/removal
-app.post('/register', (req, res) => {
+app.post('/register', (request, response) => {
   const form = formidable.IncomingForm();
 
-  form.parse(req, (error, fields, files) => {
+  form.parse(request, async (error, fields, files) => {
     const username = fields.username;
     const password = fields.password;
     const email = fields.email;
-    const referrer_code = fields.referrer_code;
 
+    try {
+      const results = await user.registerWithPass(username, password, email);
+
+      writeJSON(response, {error: false, result: results});
+    } catch (error) {
+      writeJSON(response, {error: true, message: error});
+    }
+
+    /*
     // check if the username already exists
     doesUsernameExist(username).then((value) => {
       if (error) {
@@ -131,6 +121,7 @@ app.post('/register', (req, res) => {
     }).catch((error) => {
       writeJSON(res, {error: true, message: error});
     });
+    */
   });
 
 });
@@ -263,6 +254,72 @@ app.post('/stocklist', (request, response) => {
       const stock_list = await game.getStockList(market_id);
 
       result_json = {error: false, stock_list: stock_list};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+app.post('/buystock', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const amount = fields.amount;
+    const stock_id = fields.stock_id;
+    const game_id = fields.game_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (amount === undefined || stock_id === undefined || game_id === undefined || access_token === undefined) {
+        throw "Invalid parameters";
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw "Invalid access token";
+      }
+
+      // TODO: validate that user is part of game?
+      // TODO: only allow buying when stock market is open?
+      // TODO: only allow buying when game is active (start_time, end_time)
+
+      const results = await game.buyStock(game_id, token_info.user_id, stock_id, amount);
+
+      result_json = {error: false, message: 'OK'};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+app.post('/joingame', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const game_id = fields.game_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (game_id === undefined || access_token === undefined) {
+        throw "Invalid parameters";
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw "Invalid access token";
+      }
+
+      const result = await game.joinGame(game_id, token_info.user_id);
+
+      result_json = {error: false, message: 'OK'};
     } catch (error) {
       result_json = {error: true, message: error};
     }
