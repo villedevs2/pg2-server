@@ -30,27 +30,6 @@ app.get('/', (req, res) => {
   return res.end();
 });
 
-app.get('/leaderboard', (req, res) => {
-  db.query("SELECT * FROM user_account", (error, results) => {
-    if (error) {
-      res.writeHead(400, {'Content-Type': 'text/html'});
-      return res.end();
-    } else {
-      res.writeHead(200, {'Content-Type': 'text/html'});
-      results.forEach((item) => {
-        //res.write(item.id);
-        const name = item.username;
-        const funds = parseInt(item.funds);
-
-        res.write(`<p>${name}, ${funds}</p>`);
-
-        //console.log(item.username);
-      });
-      return res.end();
-    }
-  });
-});
-
 
 const writeJSON = (res, json) => {
   res.writeHead(200, {'Content-Type': 'text/json'});
@@ -60,7 +39,9 @@ const writeJSON = (res, json) => {
 
 
 
-// POST on /login
+// ***************************************************************************
+// POST /login: login with username/password
+// ***************************************************************************
 app.post('/login', (request, response) => {
 
   const form = formidable.IncomingForm();
@@ -79,8 +60,9 @@ app.post('/login', (request, response) => {
 
 });
 
-// POST on /register
-// TODO: needs rewrite/removal
+// ***************************************************************************
+// POST /register: register with username/password/email
+// ***************************************************************************
 app.post('/register', (request, response) => {
   const form = formidable.IncomingForm();
 
@@ -97,31 +79,6 @@ app.post('/register', (request, response) => {
       writeJSON(response, {error: true, message: error});
     }
 
-    /*
-    // check if the username already exists
-    doesUsernameExist(username).then((value) => {
-      if (error) {
-        console.log(`Error: ${error}`);
-        writeJSON(res, { error: true, message: 'Database error'});
-      } else {
-
-        if (value) {
-          // username exists
-          writeJSON(res, { error: true, message: 'Username already exists'});
-        } else {
-          // nope, doesn't exist
-
-          // TODO: validate email, username
-          // TODO: salt/encrypt password
-          // TODO: validate referrer code if it exists
-
-          writeJSON(res, { error: false, message: 'Registering complete'});
-        }
-      }
-    }).catch((error) => {
-      writeJSON(res, {error: true, message: error});
-    });
-    */
   });
 
 });
@@ -239,6 +196,9 @@ app.post('/gameinfo', (request, response) => {
 });
 
 
+// *****************************************************************************
+// POST /stocklist: get stock list
+// *****************************************************************************
 app.post('/stocklist', (request, response) => {
   const form = new formidable.IncomingForm();
 
@@ -263,6 +223,9 @@ app.post('/stocklist', (request, response) => {
 });
 
 
+// *****************************************************************************
+// POST /buystock: try to buy stock
+// *****************************************************************************
 app.post('/buystock', (request, response) => {
   const form = new formidable.IncomingForm();
 
@@ -283,7 +246,11 @@ app.post('/buystock', (request, response) => {
         throw "Invalid access token";
       }
 
-      // TODO: validate that user is part of game?
+      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw "User has not joined this game";
+      }
+
       // TODO: only allow buying when stock market is open?
       // TODO: only allow buying when game is active (start_time, end_time)
 
@@ -299,6 +266,49 @@ app.post('/buystock', (request, response) => {
 });
 
 
+// ***************************************************************************
+// POST /sellstock: Sell stock
+// ***************************************************************************
+app.post('/sellstock', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const amount = fields.amount;
+    const stock_id = fields.stock_id;
+    const game_id = fields.game_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (amount === undefined || stock_id === undefined || game_id === undefined || access_token === undefined) {
+        throw "Invalid parameters";
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw "Invalid access token";
+      }
+
+      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw "User has not joined this game";
+      }
+
+      const results = await game.sellStock(game_id, token_info.user_id, stock_id, amount);
+
+      result_json = {error: false, message: 'OK'};
+    } catch (error) {
+      result_json = {error : true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+// *****************************************************************************
+// POST /joingame: Try to join a game
+// *****************************************************************************
 app.post('/joingame', (request, response) => {
   const form = new formidable.IncomingForm();
 
@@ -309,17 +319,55 @@ app.post('/joingame', (request, response) => {
     let result_json;
     try {
       if (game_id === undefined || access_token === undefined) {
-        throw "Invalid parameters";
+        throw new Error("Invalid parameters");
       }
 
       const token_info = user.validateAccessToken(access_token);
       if (!token_info.valid) {
-        throw "Invalid access token";
+        throw new Error("Invalid access token");
       }
 
       const result = await game.joinGame(game_id, token_info.user_id);
 
       result_json = {error: false, message: 'OK'};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+// *****************************************************************************
+// POST /leaderboard: Get the leaderboard for the given game
+// *****************************************************************************
+app.post('/leaderboard', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const game_id = fields.game_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("Invalid access token");
+      }
+
+      // user needs to be part of this game to view leaderboard
+      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw "User has not joined this game";
+      }
+
+      const results = await game.getLeaderboard(game_id);
+
+      result_json = {error: false, results: results};
     } catch (error) {
       result_json = {error: true, message: error};
     }

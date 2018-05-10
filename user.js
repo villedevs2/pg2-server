@@ -160,31 +160,12 @@ module.exports = {
         reject(error);
       }
 
-
-      /*
-      db.query(sql).then((results) => {
-        console.log(results);
-        if (results.length !== 1) {
-          reject("User not found");
-        }
-        if (results[0].access_token !== access_token) {
-          reject("Wrong access token");
-        }
-
-        const response = {
-          username: results[0].username,
-          image: results[0].image,
-          signup_date: results[0].signup_date
-        };
-
-        resolve(response);
-      }).catch((error) => {
-        reject(error);
-      });
-      */
     });
   },
 
+  // ***************************************************************************
+  // Gets the funds of a given user/game
+  // ***************************************************************************
   getUserFunds: (user_id, game_id) => {
     return new Promise(async (resolve, reject) => {
       let sql = `SELECT funds FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
@@ -201,6 +182,43 @@ module.exports = {
     });
   },
 
+  // ***************************************************************************
+  // Get the amount of given stock for user/game
+  // ***************************************************************************
+  getUserStock: (user_id, game_id, stock_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = ``;
+      sql += `SELECT buy_sum-sell_sum AS 'assets' `;
+      sql += `FROM( `;
+      sql += `SELECT user_id, stock_id, SUM(buy) AS buy_sum, SUM(sell) AS sell_sum `;
+      sql += `FROM( `;
+      sql += `SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell' `;
+      sql += `FROM stock_event `;
+      sql += `WHERE transaction_type='B' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}' `;
+      sql += `UNION ALL `;
+      sql += `SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell' `;
+      sql += `FROM stock_event `;
+      sql += `WHERE transaction_type='S' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}' `;
+      sql += `) AS summed `;
+      sql += `GROUP BY user_id, stock_id `;
+      sql += `) AS final, stock `;
+      sql += `WHERE final.stock_id=stock.id `;
+
+      try {
+        const results = await db.query(sql);
+        if (results.length !== 1) {
+          throw "getUserStock: can't find stock";
+        }
+        resolve(results[0].assets);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  // ***************************************************************************
+  // Try to login with username/password
+  // ***************************************************************************
   loginWithPass: (username, password) => {
     return new Promise(async (resolve, reject) => {
       try {
@@ -242,6 +260,9 @@ module.exports = {
     });
   },
 
+  // ***************************************************************************
+  // Try to register with username/password/email
+  // ***************************************************************************
   registerWithPass: (username, password, email) => {
     return new Promise(async (resolve, reject) => {
       try {
