@@ -39,9 +39,9 @@ const writeJSON = (res, json) => {
 
 
 
-// ***************************************************************************
+// *****************************************************************************
 // POST /login: login with username/password
-// ***************************************************************************
+// *****************************************************************************
 app.post('/login', (request, response) => {
 
   const form = formidable.IncomingForm();
@@ -60,9 +60,9 @@ app.post('/login', (request, response) => {
 
 });
 
-// ***************************************************************************
+// *****************************************************************************
 // POST /register: register with username/password/email
-// ***************************************************************************
+// *****************************************************************************
 app.post('/register', (request, response) => {
   const form = formidable.IncomingForm();
 
@@ -266,9 +266,9 @@ app.post('/buystock', (request, response) => {
 });
 
 
-// ***************************************************************************
+// *****************************************************************************
 // POST /sellstock: Sell stock
-// ***************************************************************************
+// *****************************************************************************
 app.post('/sellstock', (request, response) => {
   const form = new formidable.IncomingForm();
 
@@ -458,6 +458,9 @@ app.post('/sellhistory', (request, response) => {
 });
 
 
+// *****************************************************************************
+// POST /followuser: Follow a user
+// *****************************************************************************
 app.post('/followuser', (request, response) => {
   const form = new formidable.IncomingForm();
 
@@ -477,6 +480,39 @@ app.post('/followuser', (request, response) => {
       }
 
       const result = await user.followUser(token_info.user_id, followed_id);
+
+      result_json = {error: false, result: result};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+// *****************************************************************************
+// POST /unfollowuser: Unfollow a usr
+// *****************************************************************************
+app.post('/unfollowuser', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const followed_id = fields.followed_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (followed_id === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("Invalid access token");
+      }
+
+      const result = await user.unfollowUser(token_info.user_id, followed_id);
 
       result_json = {error: false, result: result};
     } catch (error) {
