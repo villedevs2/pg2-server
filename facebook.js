@@ -15,8 +15,7 @@ const settings = require('./settings.json');
 const hashFBAccount = (fb_account) => {
   const hash = crypto.createHash('sha256');
   hash.update(fb_account);
-  const digest = `FB${hash.digest('hex')}`;
-  return digest;
+  return `FB${hash.digest('hex')}`;
 };
 
 // *****************************************************************************

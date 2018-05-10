@@ -78,27 +78,27 @@ module.exports = {
   // ***************************************************************************
   getLeaderboard: (game_id) => {
     return new Promise(async (resolve, reject) => {
-      let sql = ``;
-      sql += `SELECT u.username, u.image, SUM(assets) AS 'net_worth' `;
-      sql += `FROM( `;
-      sql += `SELECT user_id, stock.full_name, (buy_sum-sell_sum)*stock.price AS 'assets' `;
-      sql += `FROM( `;
-      sql += `SELECT user_id, stock_id, SUM(buy) AS buy_sum, SUM(sell) AS sell_sum `;
-      sql += `FROM( `;
-      sql += `SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell' `;
-      sql += `FROM stock_event `;
-      sql += `WHERE transaction_type='B' AND game_id='${game_id}' `;
-      sql += `UNION ALL `;
-      sql += `SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell' `;
-      sql += `FROM stock_event `;
-      sql += `WHERE transaction_type='S' AND game_id='${game_id}' `;
-      sql += `) AS summed `;
-      sql += `GROUP BY user_id, stock_id `;
-      sql += `) AS final, stock `;
-      sql += `WHERE final.stock_id=stock.id `;
-      sql += `) AS a, user_account AS u `;
-      sql += `WHERE u.id=user_id `;
-      sql += `GROUP BY user_id `;
+      let sql = `
+        SELECT u.username, u.image, SUM(assets) AS 'net_worth'
+        FROM(
+        SELECT user_id, stock.full_name, (buy_sum-sell_sum)*stock.price AS 'assets'
+        FROM(
+        SELECT user_id, stock_id, SUM(buy) AS 'buy_sum', SUM(sell) AS 'sell_sum'
+        FROM(
+        SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell'
+        FROM stock_event
+        WHERE transaction_type='B' AND game_id='${game_id}'
+        UNION ALL
+        SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell'
+        FROM stock_event
+        WHERE transaction_type='S' AND game_id='${game_id}'
+        ) AS summed
+        GROUP BY user_id, stock_id
+        ) AS final, stock
+        WHERE final.stock_id=stock.id
+        ) AS a, user_account AS u
+        WHERE u.id=user_id 
+        GROUP BY user_id`;
 
       try {
         const results = await db.query(sql);

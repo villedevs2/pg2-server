@@ -25,7 +25,7 @@ const doesUsernameExist = (username) => {
 };
 
 const doesEmailExist = (email) => {
-  return new Promise(async (resolve, rejct) => {
+  return new Promise(async (resolve, reject) => {
     let sql = `SELECT id FROM user_account WHERE email='${email}'`;
 
     try {
@@ -40,8 +40,7 @@ const doesEmailExist = (email) => {
 const hashPassword = (password) => {
   const hash = crypto.createHash('sha256');
   hash.update(`${password}.${settings.db_pass_salt}`);
-  const digest = hash.digest('hex');
-  return digest;
+  return hash.digest('hex');
 };
 
 const getUserIDWithUsername = (username) => {
@@ -55,6 +54,20 @@ const getUserIDWithUsername = (username) => {
         value = results[0].id;
       }
       resolve(value);
+    } catch (error) {
+      reject(error);
+    }
+
+  });
+};
+
+const isUserFollowed = (user_id, followed_user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT * FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      resolve(result.length === 1);
     } catch (error) {
       reject(error);
     }
@@ -96,11 +109,11 @@ const validateAccessToken = (token) => {
   const buffer = Buffer.from(decrypted);
 
   const version = buffer.readUInt16BE(0);
-  const tokid = buffer.slice(2, 9).toString('utf8');
+  const token_id = buffer.slice(2, 9).toString('utf8');
   const user_id = buffer.readUInt32BE(9);
 
   const result = {
-    valid: (version === ACCESS_TOKEN_VERSION && tokid === ACCESS_TOKEN_ID),
+    valid: (version === ACCESS_TOKEN_VERSION && token_id === ACCESS_TOKEN_ID),
     user_id: user_id,
   };
 
@@ -160,6 +173,66 @@ module.exports = {
         reject(error);
       }
 
+    });
+  },
+
+  // ***************************************************************************
+  // Follow a user
+  // ***************************************************************************
+  followUser: (user_id, followed_user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `INSERT INTO user_follow(user_id, followed_id) VALUES('${user_id}', '${followed_user_id}')`;
+
+      try {
+        if (user_id === followed_user_id) {
+          reject('FOLLOW_USER_SELF');
+        }
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          reject('FOLLOW_USER_RESULT');
+        }
+        resolve('OK');
+      } catch (error) {
+        console.log(error);
+        reject('DATABASE_FAIL');
+      }
+    });
+  },
+
+  // ***************************************************************************
+  // Unfollow a user
+  // ***************************************************************************
+  unfollowUser: (user_id, followed_user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `DELETE FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          reject('UNFOLLOW_USER_RESULT');
+        }
+        resolve('OK');
+      } catch (error) {
+        console.log(error);
+        reject('DATABASE_FAIL');
+      }
+    });
+  },
+
+  // ***************************************************************************
+  // Count the number of followers for a user
+  // ***************************************************************************
+  countUserFollowers: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `SELECT COUNT(followed_id) AS 'followers' FROM user_follow WHERE followed_id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
     });
   },
 

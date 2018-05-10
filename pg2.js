@@ -294,6 +294,9 @@ app.post('/sellstock', (request, response) => {
         throw "User has not joined this game";
       }
 
+      // TODO: only allow selling when stock market is open?
+      // TODO: only allow selling when game is active (start_time, end_time)
+
       const results = await game.sellStock(game_id, token_info.user_id, stock_id, amount);
 
       result_json = {error: false, message: 'OK'};
@@ -446,6 +449,36 @@ app.post('/sellhistory', (request, response) => {
       const results = await user.getSellHistory(token_info.user_id, game_id);
 
       result_json = {error: false, results: results};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+app.post('/followuser', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const followed_id = fields.followed_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (followed_id === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("Invalid access token");
+      }
+
+      const result = await user.followUser(token_info.user_id, followed_id);
+
+      result_json = {error: false, result: result};
     } catch (error) {
       result_json = {error: true, message: error};
     }
