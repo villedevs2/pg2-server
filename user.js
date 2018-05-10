@@ -183,6 +183,55 @@ module.exports = {
   },
 
   // ***************************************************************************
+  // Get the buy history for user/game
+  // ***************************************************************************
+  getBuyHistory: (user_id, game_id) => {
+    return new Promise(async (resolve, reject) => {
+      /*
+      let sql = ``;
+      sql += `SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst' `;
+      sql += `FROM stock_event, stock AS s `;
+      sql += `WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}' `;
+      sql += `ORDER BY tst DESC`;
+      */
+
+      let sql = ` 
+        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
+        FROM stock_event, stock AS s
+        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
+        ORDER BY tst DESC`;
+
+      try {
+        const results = await db.query(sql);
+        resolve(results);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  // ***************************************************************************
+  // Get the sell history for user/game
+  // ***************************************************************************
+  getSellHistory: (user_id, game_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `
+        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
+        FROM stock_event, stock AS s
+        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
+        ORDER BY tst DESC`;
+
+      try {
+        const results = await db.query(sql);
+        resolve(results);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+
+  // ***************************************************************************
   // Get the amount of given stock for user/game
   // ***************************************************************************
   getUserStock: (user_id, game_id, stock_id) => {

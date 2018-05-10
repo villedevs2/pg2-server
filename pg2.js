@@ -377,6 +377,83 @@ app.post('/leaderboard', (request, response) => {
 });
 
 
+// *****************************************************************************
+// POST /buyhistory: Get buy history for user/game
+// *****************************************************************************
+app.post('/buyhistory', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const game_id = fields.game_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("Invalid access token");
+      }
+
+      // user needs to have joined this game
+      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw "User has not joined this game";
+      }
+
+      const results = await user.getBuyHistory(token_info.user_id, game_id);
+
+      result_json = {error: false, results: results};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+// *****************************************************************************
+// POST /sellhistory: Get buy history for user/game
+// *****************************************************************************
+app.post('/sellhistory', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const game_id = fields.game_id;
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("Invalid access token");
+      }
+
+      // user needs to have joined this game
+      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw "User has not joined this game";
+      }
+
+      const results = await user.getSellHistory(token_info.user_id, game_id);
+
+      result_json = {error: false, results: results};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
 
 
 // *****************************************************************************
