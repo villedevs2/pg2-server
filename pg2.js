@@ -524,6 +524,89 @@ app.post('/unfollowuser', (request, response) => {
 });
 
 
+app.post('/userpublicinfo', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const user_id = fields.user_id;
+
+    let result_json;
+    try {
+      if (user_id === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const results = await user.getUserPublicInfo(user_id);
+
+      result_json = {error: false, results: results};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+app.post('/followerlist', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (access_token === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("Invalid access token");
+      }
+
+      const results = await user.getFollowerList(token_info.user_id);
+
+      result_json = {error: false, results: results};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+app.post('/followinglist', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const access_token = fields.token;
+
+    let result_json;
+    try {
+      if (access_token === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("Invalid access token");
+      }
+
+      const results = await user.getFollowingList(token_info.user_id);
+
+      result_json = {error: false, results: results};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+
 
 // *****************************************************************************
 // POST on /upload: send image files

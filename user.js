@@ -75,6 +75,26 @@ const isUserFollowed = (user_id, followed_user_id) => {
   });
 };
 
+// *****************************************************************************
+// Count the amount of followers a user has
+// *****************************************************************************
+const countUserFollowers = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT COUNT(followed_id) AS 'followers' FROM user_follow WHERE followed_id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      let followers = 0;
+      if (result.length === 1) {
+        followers = result[0].followers;
+      }
+      resolve(followers);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const generateAccessToken = (user_id) => {
   const header_buffer = Buffer(13);
   header_buffer.writeUInt16BE(ACCESS_TOKEN_VERSION, 0);
@@ -177,6 +197,30 @@ module.exports = {
   },
 
   // ***************************************************************************
+  // Get publicly available info for a user. Does not require token.
+  getUserPublicInfo: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const followers = await countUserFollowers(user_id);
+
+        let sql = `SELECT username, signup_date, image FROM user_account WHERE id='${user_id}'`;
+        const results = await db.query(sql);
+
+        if (results.length !== 1) {
+          reject('GETUSERPUBLICINFO_NOT_FOUND');
+        }
+
+        results[0].followers = followers;
+
+        resolve(results[0]);
+      } catch (error) {
+        console.log(error);
+        reject('FAIL');
+      }
+    });
+  },
+
+  // ***************************************************************************
   // Follow a user
   // ***************************************************************************
   followUser: (user_id, followed_user_id) => {
@@ -220,18 +264,40 @@ module.exports = {
     });
   },
 
-  // ***************************************************************************
-  // Count the number of followers for a user
-  // ***************************************************************************
-  countUserFollowers: (user_id) => {
+  getFollowerList: (user_id) => {
     return new Promise(async (resolve, reject) => {
-      let sql = `SELECT COUNT(followed_id) AS 'followers' FROM user_follow WHERE followed_id='${user_id}'`;
+      let sql = `
+        SELECT u.id, u.username, u.image, f.follow_date
+        FROM user_account AS u, user_follow AS f
+        WHERE f.followed_id='${user_id}' AND f.user_id=u.id`;
+
+      // TODO: sort by follow date
 
       try {
-        const result = await db.query(sql);
-        resolve(result);
+        const results = await db.query(sql);
+        resolve(results);
       } catch (error) {
-        reject(error);
+        console.log(error);
+        reject('DATABASE_FAIL');
+      }
+    });
+  },
+
+  getFollowingList: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `
+        SELECT u.id, u.username, u.image, f.follow_date
+        FROM user_account AS u, user_follow AS f
+        WHERE f.user_id='${user_id}' AND f.followed_id=u.id`;
+
+      // TODO: sort by follow date
+
+      try {
+        const results = await db.query(sql);
+        resolve(results);
+      } catch (error) {
+        console.log(error);
+        reject('DATABASE_FAIL');
       }
     });
   },
