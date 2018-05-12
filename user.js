@@ -11,6 +11,13 @@ const ACCESS_TOKEN_VERSION = 0x0001;
 const ACCESS_TOKEN_ID = 'PGTOKEN';
 
 
+// regex for username:
+// 3-15 characters
+// Allowed characters
+// A-Ö a-ö 0-9 _ -
+const username_regex = new RegExp("^[A-Za-z0-9_\-ÄÅÖäåö]{3,15}$");
+
+
 const doesUsernameExist = (username) => {
   return new Promise(async (resolve, reject) => {
     let sql = `SELECT id FROM user_account WHERE username='${username}'`;
@@ -450,8 +457,11 @@ module.exports = {
   loginWithPass: (username, password) => {
     return new Promise(async (resolve, reject) => {
       try {
-        // TODO: validate username
-        // TODO: validate password
+        // validate username
+        const valid_username = username_regex(username) !== null;
+        if (!valid_username) {
+          throw "Badly formed username";
+        }
 
         const exists = await doesUsernameExist(username);
         if (!exists) {
@@ -497,9 +507,11 @@ module.exports = {
   registerWithPass: (username, password, email) => {
     return new Promise(async (resolve, reject) => {
       try {
-        // TODO: validate username
-        // TODO: validate password
-        // TODO: validate email
+        // validate username
+        const valid_username = username_regex(username) !== null;
+        if (!valid_username) {
+          throw "Badly formed username";
+        }
 
         const exists = await doesUsernameExist(username);
         if (exists) {
@@ -514,6 +526,10 @@ module.exports = {
         const email_exists = await doesEmailExist(email);
         if (email_exists) {
           throw "E-mail address already in use";
+        }
+
+        if (password.length < 8) {
+          throw "Password too short";
         }
 
         const hashed_pw = hashPassword(password);
