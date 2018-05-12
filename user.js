@@ -2,7 +2,7 @@
 
 const db = require('./database');
 const crypto = require('crypto');
-const email_validator = require('email-validator');
+const validator = require('validator');
 
 const settings = require('./settings.json');
 
@@ -132,12 +132,10 @@ const validateAccessToken = (token) => {
   const token_id = buffer.slice(2, 9).toString('utf8');
   const user_id = buffer.readUInt32BE(9);
 
-  const result = {
+  return {
     valid: (version === ACCESS_TOKEN_VERSION && token_id === ACCESS_TOKEN_ID),
     user_id: user_id,
   };
-
-  return result;
 };
 
 const updateAccessToken = (user_id, access_token) => {
@@ -264,6 +262,9 @@ module.exports = {
     });
   },
 
+  // ***************************************************************************
+  // Get a list of followers for a user
+  // ***************************************************************************
   getFollowerList: (user_id) => {
     return new Promise(async (resolve, reject) => {
       let sql = `
@@ -283,6 +284,9 @@ module.exports = {
     });
   },
 
+  // ***************************************************************************
+  // Get a list of followed users for a user
+  // ***************************************************************************
   getFollowingList: (user_id) => {
     return new Promise(async (resolve, reject) => {
       let sql = `
@@ -301,6 +305,42 @@ module.exports = {
       }
     });
   },
+
+
+  sendUserMessage: (user_id, sender_id, message) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // validate message contents
+        let message_sane = validator.escape(message.message);
+        message_sane = validator.stripLow(message_sane, true);
+
+        // validate message title
+        let title_sane = validator.escape(message.title);
+        title_sane = validator.stripLow(title_sane, true);
+
+        if (sender_id === null) {
+          sender_id = 'NULL';
+        } else {
+          sender_id = `'${sender_id}'`;
+        }
+
+
+        let sql = `
+          INSERT INTO user_message(user_id, sender_id, title, message)
+          VALUES('${user_id}', ${sender_id}, '${title_sane}', '${message_sane}')`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          reject('SENDUSERMESSAGE_FAIL');
+        }
+        resolve('OK');
+      } catch (error) {
+        console.log(error);
+        reject('DATABASE_FAIL');
+      }
+    });
+  },
+
 
   // ***************************************************************************
   // Gets the funds of a given user/game
@@ -410,6 +450,9 @@ module.exports = {
   loginWithPass: (username, password) => {
     return new Promise(async (resolve, reject) => {
       try {
+        // TODO: validate username
+        // TODO: validate password
+
         const exists = await doesUsernameExist(username);
         if (!exists) {
           throw "Username does not exist";
@@ -454,12 +497,16 @@ module.exports = {
   registerWithPass: (username, password, email) => {
     return new Promise(async (resolve, reject) => {
       try {
+        // TODO: validate username
+        // TODO: validate password
+        // TODO: validate email
+
         const exists = await doesUsernameExist(username);
         if (exists) {
           throw "Username already in use";
         }
 
-        const valid_email = email_validator.validate(email);
+        const valid_email = validator.isEmail(email);
         if (!valid_email) {
           throw "Invalid E-mail address";
         }

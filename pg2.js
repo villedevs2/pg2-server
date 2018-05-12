@@ -607,6 +607,39 @@ app.post('/followinglist', (request, response) => {
 
 
 
+// TODO: just for testing, remove
+app.post('/sendusermsg_tst', (request, response) => {
+  const form = new formidable.IncomingForm();
+
+  form.parse(request, async (error, fields, files) => {
+    const user_id = fields.user_id;
+    const message_body = fields.message_body;
+    const message_title = fields.message_title;
+
+    let result_json;
+    try {
+      if (user_id === undefined || message_body === undefined || message_title === undefined) {
+        throw new Error("Invalid parameters");
+      }
+
+      let message = {
+        title: message_title,
+        message: message_body,
+      };
+
+      const result = await user.sendUserMessage(user_id, null, message);
+
+      result_json = {error: false, result: result};
+    } catch (error) {
+      result_json = {error: true, message: error};
+    }
+
+    writeJSON(response, result_json);
+  });
+});
+
+
+
 
 // *****************************************************************************
 // POST on /upload: send image files
