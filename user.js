@@ -51,7 +51,7 @@ const getAccountStatus = (user_id) => {
     try {
       const result = await db.query(sql);
       if (result.length !== 1) {
-        throw "Account not found";
+        reject("GETACCOUNTSTATUS_NOT_FOUND")
       }
       resolve(result[0].account_status);
     } catch (error) {
@@ -203,10 +203,10 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          throw "User not found";
+          reject("GETINFO_NOT_FOUND");
         }
         if (results[0].access_token !== access_token) {
-          throw "Wrong access token";
+          reject("GETINFO_ACCESS_TOKEN");
         }
 
         resolve(results);
@@ -375,7 +375,7 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          throw "getUserFunds: can't fetch funds";
+          reject("GETUSERFUNDS_NOT_FOUND");
         }
         resolve(results[0].funds);
       } catch (error) {
@@ -458,7 +458,7 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          throw "getUserStock: can't find stock";
+          reject("GETUSERSTOCK_NOT_FOUND");
         }
         resolve(results[0].assets);
       } catch (error) {
@@ -475,37 +475,37 @@ module.exports = {
       try {
         const valid_email = validator.isEmail(email);
         if (!valid_email) {
-          throw "Invalid E-mail address";
+          reject("EMLOGIN_INVALID_EMAIL");
         }
 
         const email_exists = await doesEmailExist(email);
         if (!email_exists) {
-          throw "Email does not exist";
+          reject("EMLOGIN_EMAIL_NOT_FOUND");
         }
 
         let sql = `SELECT id, pass FROM user_account WHERE email='${email}'`;
 
         const results = await db.query(sql);
         if (results.length !== 1) {
-          throw "Database error in login";
+          reject("EMLOGIN_FAIL");
         }
 
         const hashed_pw = hashPassword(password);
         if (results[0].pass !== hashed_pw) {
-          throw "Wrong password";
+          reject("EMLOGIN_WRONG_PASS");
         }
 
         // get user id for the new account
         const user_id = results[0].id;
         if (user_id === null) {
-          throw "User ID not found";
+          reject("EMLOGIN_USER_ID")
         }
 
         // try to update the access token
         const access_token = generateAccessToken(user_id);
         const update_ok = await updateAccessToken(user_id, access_token);
         if (!update_ok) {
-          throw "Cannot update access token";
+          reject("EMLOGIN_ACCESS_TOKEN");
         }
 
         // all ok!
@@ -525,26 +525,26 @@ module.exports = {
         // validate username
         const valid_username = username_regex(username) !== null;
         if (!valid_username) {
-          throw "Badly formed username";
+          reject("EMREGISTER_INVALID_USERNAME");
         }
 
         const exists = await doesUsernameExist(username);
         if (exists) {
-          throw "Username already in use";
+          reject("EMREGISTER_USERNAME_EXISTS");
         }
 
         const valid_email = validator.isEmail(email);
         if (!valid_email) {
-          throw "Invalid E-mail address";
+          reject("EMREGISTER_INVALID_EMAIL");
         }
 
         const email_exists = await doesEmailExist(email);
         if (email_exists) {
-          throw "E-mail address already in use";
+          reject("EMREGISTER_EMAIL_EXISTS");
         }
 
         if (password.length < 8) {
-          throw "Password too short";
+          reject("EMREGISTER_PASSWORD_LENGTH");
         }
 
         const hashed_pw = hashPassword(password);
@@ -557,20 +557,20 @@ module.exports = {
         const results = await db.query(sql);
 
         if (results.affectedRows !== 1) {
-          throw "Registering failed";
+          reject("EMREGISTER_REG_FAIL");
         }
 
         // get user id for the new account
         const user_id = await getUserIDWithUsername(username);
         if (user_id === null) {
-          throw "User ID not found";
+          reject("EMREGISTER_FAIL");
         }
 
         // try to update the access token
         const access_token = generateAccessToken(user_id);
         const update_ok = await updateAccessToken(user_id, access_token);
         if (!update_ok) {
-          throw "Cannot update access token";
+          reject("EMREGISTER_ACCESS_TOKEN");
         }
 
         // all ok!
