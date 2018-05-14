@@ -44,15 +44,31 @@ const doesEmailExist = (email) => {
   });
 };
 
+const getAccountStatus = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT account_status FROM user_account WHERE user_id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw "Account not found";
+      }
+      resolve(result[0].account_status);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const hashPassword = (password) => {
   const hash = crypto.createHash('sha256');
   hash.update(`${password}.${settings.db_pass_salt}`);
   return hash.digest('hex');
 };
 
-const getUserIDWithUsername = (username) => {
+const getUserIDWithEmail = (email) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `SELECT id FROM user_account WHERE username='${username}'`;
+    let sql = `SELECT id FROM user_account WHERE email='${email}'`;
 
     try {
       const results = await db.query(sql);
@@ -452,23 +468,22 @@ module.exports = {
   },
 
   // ***************************************************************************
-  // Try to login with username/password
+  // Try to login with email/password
   // ***************************************************************************
-  loginWithPass: (username, password) => {
+  loginWithEmail: (email, password) => {
     return new Promise(async (resolve, reject) => {
       try {
-        // validate username
-        const valid_username = username_regex(username) !== null;
-        if (!valid_username) {
-          throw "Badly formed username";
+        const valid_email = validator.isEmail(email);
+        if (!valid_email) {
+          throw "Invalid E-mail address";
         }
 
-        const exists = await doesUsernameExist(username);
-        if (!exists) {
-          throw "Username does not exist";
+        const email_exists = await doesEmailExist(email);
+        if (!email_exists) {
+          throw "Email does not exist";
         }
 
-        let sql = `SELECT id, pass FROM user_account WHERE username='${username}'`;
+        let sql = `SELECT id, pass FROM user_account WHERE email='${email}'`;
 
         const results = await db.query(sql);
         if (results.length !== 1) {
@@ -502,9 +517,9 @@ module.exports = {
   },
 
   // ***************************************************************************
-  // Try to register with username/password/email
+  // Try to register with email
   // ***************************************************************************
-  registerWithPass: (username, password, email) => {
+  registerWithEmail: (email, password, username) => {
     return new Promise(async (resolve, reject) => {
       try {
         // validate username

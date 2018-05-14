@@ -40,17 +40,17 @@ const writeJSON = (res, json) => {
 
 
 // *****************************************************************************
-// POST /login: login with username/password
+// POST /login: login with email/password
 // *****************************************************************************
 app.post('/login', (request, response) => {
 
   const form = formidable.IncomingForm();
   form.parse(request, async (error, fields, files) => {
-    const username = fields.username;
+    const email = fields.email;
     const password = fields.password;
 
     try {
-      const results = await user.loginWithPass(username, password);
+      const results = await user.loginWithEmail(email, password);
 
       writeJSON(response, {error: false, result: results});
     } catch (error) {
@@ -61,7 +61,7 @@ app.post('/login', (request, response) => {
 });
 
 // *****************************************************************************
-// POST /register: register with username/password/email
+// POST /register: register with email/password/username
 // *****************************************************************************
 app.post('/register', (request, response) => {
   const form = formidable.IncomingForm();
@@ -72,7 +72,7 @@ app.post('/register', (request, response) => {
     const email = fields.email;
 
     try {
-      const results = await user.registerWithPass(username, password, email);
+      const results = await user.registerWithEmail(email, password, username);
 
       writeJSON(response, {error: false, result: results});
     } catch (error) {
