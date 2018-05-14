@@ -8,7 +8,7 @@ const getStockPrice = (stock_id) => {
     try {
       const results = await db.query(sql);
       if (results.length !== 1) {
-        throw "getStockPrice: stock not found";
+        reject("GETSTOCKPRICE_NOT_FOUND");
       }
       resolve(results[0].price);
     } catch (error) {
@@ -24,7 +24,7 @@ const getGameInfo = (game_id) => {
     try {
       const results = await db.query(sql);
       if (results.length !== 1) {
-        throw "getGameInfo: game not found";
+        reject("GETGAMEINFO_NOT_FOUND");
       }
       resolve(results[0]);
     } catch (error) {
@@ -47,7 +47,7 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          throw "getGameInfo game id not found";
+          reject("GETGAMEINFO_NOT_FOUND");
         }
         resolve(results);
       } catch (error) {
@@ -158,7 +158,7 @@ module.exports = {
 
         const needed_funds = Number(amount) * Number(stock_price);
         if (needed_funds > user_funds) {
-          throw "Not enough funds";
+          reject("BUYSTOCK_NOT_ENOUGH");
         }
 
         // start buy transaction
@@ -189,7 +189,7 @@ module.exports = {
         console.log(`user stock = ${user_stock}`);
 
         if (user_stock < amount) {
-          throw "Not enough stock";
+          reject("SELLSTOCK_NOT_ENOUGH");
         }
 
         const rewarded_funds = Number(amount) * Number(stock_price);
