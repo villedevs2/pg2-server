@@ -140,24 +140,24 @@ module.exports = {
       try {
         const token_valid = await isValidFBToken(auth_token, fb_account);
         if (!token_valid) {
-          reject("FBLOGIN_INVALID_TOKEN");
+          throw new Error("FBLOGIN_INVALID_TOKEN");
         }
 
         const account_exists = await isFBAccountRegistered(fb_account);
         if (!account_exists) {
-          reject("FBLOGIN_ACCOUNT_NOT_FOUND");
+          throw new Error("FBLOGIN_ACCOUNT_NOT_FOUND");
         }
 
         const user_id = await getUserID(fb_account);
         if (user_id === null) {
-          reject("FBLOGIN_USER_ID_NOT_FOUND");
+          throw new Error("FBLOGIN_USER_ID_NOT_FOUND");
         }
 
         const access_token = user.generateAccessToken(user_id);
 
         const update_ok = await user.updateAccessToken(user_id, access_token);
         if (!update_ok) {
-          reject("FBLOGIN_ACCESS_TOKEN");
+          throw new Error("FBLOGIN_ACCESS_TOKEN");
         }
 
         resolve({token: access_token});
@@ -217,34 +217,34 @@ module.exports = {
         // first check for valid FB token
         const token_valid = await isValidFBToken(auth_token, fb_account);
         if (!token_valid) {
-          reject("FBREGISTER_INVALID_TOKEN");
+          throw new Error("FBREGISTER_INVALID_TOKEN");
         }
         // check if the account already exists
         const account_exists = await isFBAccountRegistered(fb_account);
         if (account_exists) {
-          reject("FBREGISTER_ACCOUNT_EXISTS");
+          throw new Error("FBREGISTER_ACCOUNT_EXISTS");
         }
         // check if the username already exists
         const username_exists = await isUsernameRegistered(user_name);
         if (username_exists) {
-          reject("FBREGISTER_USERNAME_EXISTS");
+          throw new Error("FBREGISTER_USERNAME_EXISTS");
         }
         // try register
         const reg_ok = await registerWithFB(fb_account, user_name);
         if (!reg_ok) {
-          reject("FBREGISTER_REG_FAIL");
+          throw new Error("FBREGISTER_REG_FAIL");
         }
         // get user id for the new account
         const user_id = await getUserID(fb_account);
         if (user_id === null) {
-          reject("FBREGISTER_USER_ID_NOT_FOUND");
+          throw new Error("FBREGISTER_USER_ID_NOT_FOUND");
         }
 
         // try to update the access token
         const access_token = user.generateAccessToken(user_id);
         const update_ok = await user.updateAccessToken(user_id, access_token);
         if (!update_ok) {
-          reject("FBREGISTER_ACCESS_TOKEN");
+          throw new Error("FBREGISTER_ACCESS_TOKEN");
         }
 
         // all ok!

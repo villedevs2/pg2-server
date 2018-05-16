@@ -51,7 +51,7 @@ const getAccountStatus = (user_id) => {
     try {
       const result = await db.query(sql);
       if (result.length !== 1) {
-        reject("GETACCOUNTSTATUS_NOT_FOUND")
+        throw new Error("GETACCOUNTSTATUS_NOT_FOUND")
       }
       resolve(result[0].account_status);
     } catch (error) {
@@ -192,6 +192,62 @@ module.exports = {
   // ***************************************************************************
   updateAccessToken: updateAccessToken,
 
+  suspendUser: (user_id, duration) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `
+        UPDATE user_account SET suspend_end=CURRENT_TIMESTAMP+'${duration}'
+        WHERE id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("SUSPENDUSER_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  isUserSuspended: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `
+        SELECT IF(CURRENT_TIMESTAMP < suspend_end, true, false) AS 'suspended'
+        FROM user_account WHERE id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        if (result.length !== 1) {
+          throw new Error("ISUSERSUSPENDED_NOT_FOUND");
+        }
+        resolve(result[0].suspended);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  isUserActivated: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `
+        SELECT IF(account_status == 'active', true, false) AS 'activated'
+        FROM user_account WHERE id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        if (result.length !== 1) {
+          throw new Error("ISUSERACTIVATED_NOT_FOUND");
+        }
+        resolve(result[0].activated);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+
+
   // ***************************************************************************
   // Gets info for a user with User ID and Access Token
   // ***************************************************************************
@@ -203,10 +259,10 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          reject("GETINFO_NOT_FOUND");
+          throw new Error("GETINFO_NOT_FOUND");
         }
         if (results[0].access_token !== access_token) {
-          reject("GETINFO_ACCESS_TOKEN");
+          throw new Error("GETINFO_ACCESS_TOKEN");
         }
 
         resolve(results);
@@ -228,7 +284,7 @@ module.exports = {
         const results = await db.query(sql);
 
         if (results.length !== 1) {
-          reject('GETUSERPUBLICINFO_NOT_FOUND');
+          throw new Error('GETUSERPUBLICINFO_NOT_FOUND');
         }
 
         results[0].followers = followers;
@@ -250,12 +306,12 @@ module.exports = {
 
       try {
         if (user_id === followed_user_id) {
-          reject('FOLLOW_USER_SELF');
+          throw new Error('FOLLOW_USER_SELF');
         }
 
         const result = await db.query(sql);
         if (result.affectedRows !== 1) {
-          reject('FOLLOW_USER_RESULT');
+          throw new Error('FOLLOW_USER_RESULT');
         }
         resolve('OK');
       } catch (error) {
@@ -275,7 +331,7 @@ module.exports = {
       try {
         const result = await db.query(sql);
         if (result.affectedRows !== 1) {
-          reject('UNFOLLOW_USER_RESULT');
+          throw new Error('UNFOLLOW_USER_RESULT');
         }
         resolve('OK');
       } catch (error) {
@@ -354,7 +410,7 @@ module.exports = {
 
         const result = await db.query(sql);
         if (result.affectedRows !== 1) {
-          reject('SENDUSERMESSAGE_FAIL');
+          throw new Error('SENDUSERMESSAGE_FAIL');
         }
         resolve('OK');
       } catch (error) {
@@ -375,7 +431,7 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          reject("GETUSERFUNDS_NOT_FOUND");
+          throw new Error("GETUSERFUNDS_NOT_FOUND");
         }
         resolve(results[0].funds);
       } catch (error) {
@@ -458,7 +514,7 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          reject("GETUSERSTOCK_NOT_FOUND");
+          throw new Error("GETUSERSTOCK_NOT_FOUND");
         }
         resolve(results[0].assets);
       } catch (error) {
@@ -475,37 +531,37 @@ module.exports = {
       try {
         const valid_email = validator.isEmail(email);
         if (!valid_email) {
-          reject("EMLOGIN_INVALID_EMAIL");
+          throw new Error("EMLOGIN_INVALID_EMAIL");
         }
 
         const email_exists = await doesEmailExist(email);
         if (!email_exists) {
-          reject("EMLOGIN_EMAIL_NOT_FOUND");
+          throw new Error("EMLOGIN_EMAIL_NOT_FOUND");
         }
 
         let sql = `SELECT id, pass FROM user_account WHERE email='${email}'`;
 
         const results = await db.query(sql);
         if (results.length !== 1) {
-          reject("EMLOGIN_FAIL");
+          throw new Error("EMLOGIN_FAIL");
         }
 
         const hashed_pw = hashPassword(password);
         if (results[0].pass !== hashed_pw) {
-          reject("EMLOGIN_WRONG_PASS");
+          throw new Error("EMLOGIN_WRONG_PASS");
         }
 
         // get user id for the new account
         const user_id = results[0].id;
         if (user_id === null) {
-          reject("EMLOGIN_USER_ID")
+          throw new Error("EMLOGIN_USER_ID")
         }
 
         // try to update the access token
         const access_token = generateAccessToken(user_id);
         const update_ok = await updateAccessToken(user_id, access_token);
         if (!update_ok) {
-          reject("EMLOGIN_ACCESS_TOKEN");
+          throw new Error("EMLOGIN_ACCESS_TOKEN");
         }
 
         // all ok!
@@ -523,28 +579,29 @@ module.exports = {
     return new Promise(async (resolve, reject) => {
       try {
         // validate username
-        const valid_username = username_regex(username) !== null;
+        const valid_username = username_regex.exec(username) !== null;
         if (!valid_username) {
-          reject("EMREGISTER_INVALID_USERNAME");
+          throw new Error("EMREGISTER_INVALID_USERNAME");
         }
 
         const exists = await doesUsernameExist(username);
+        console.log(exists);
         if (exists) {
-          reject("EMREGISTER_USERNAME_EXISTS");
+          throw new Error("EMREGISTER_USERNAME_EXISTS");
         }
 
         const valid_email = validator.isEmail(email);
         if (!valid_email) {
-          reject("EMREGISTER_INVALID_EMAIL");
+          throw new Error("EMREGISTER_INVALID_EMAIL");
         }
 
         const email_exists = await doesEmailExist(email);
         if (email_exists) {
-          reject("EMREGISTER_EMAIL_EXISTS");
+          throw new Error("EMREGISTER_EMAIL_EXISTS");
         }
 
         if (password.length < 8) {
-          reject("EMREGISTER_PASSWORD_LENGTH");
+          throw new Error("EMREGISTER_PASSWORD_LENGTH");
         }
 
         const hashed_pw = hashPassword(password);
@@ -557,20 +614,20 @@ module.exports = {
         const results = await db.query(sql);
 
         if (results.affectedRows !== 1) {
-          reject("EMREGISTER_REG_FAIL");
+          throw new Error("EMREGISTER_REG_FAIL");
         }
 
         // get user id for the new account
-        const user_id = await getUserIDWithUsername(username);
+        const user_id = await getUserIDWithEmail(email);
         if (user_id === null) {
-          reject("EMREGISTER_FAIL");
+          throw new Error("EMREGISTER_FAIL");
         }
 
         // try to update the access token
         const access_token = generateAccessToken(user_id);
         const update_ok = await updateAccessToken(user_id, access_token);
         if (!update_ok) {
-          reject("EMREGISTER_ACCESS_TOKEN");
+          throw new Error("EMREGISTER_ACCESS_TOKEN");
         }
 
         // all ok!

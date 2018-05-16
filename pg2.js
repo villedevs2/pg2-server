@@ -2,8 +2,6 @@ const express = require('express');
 const formidable = require('formidable');
 const util = require('util');
 const fs = require('fs');
-const https = require('https');
-const db = require('./database');
 const facebook = require('./facebook');
 const user = require('./user');
 const game = require('./game');
@@ -54,7 +52,7 @@ app.post('/login', (request, response) => {
 
       writeJSON(response, {error: false, result: results});
     } catch (error) {
-      writeJSON(response, {error: true, message: error});
+      writeJSON(response, {error: true, message: error.message});
     }
   });
 
@@ -76,7 +74,7 @@ app.post('/register', (request, response) => {
 
       writeJSON(response, {error: false, result: results});
     } catch (error) {
-      writeJSON(response, {error: true, message: error});
+      writeJSON(response, {error: true, message: error.message});
     }
 
   });
@@ -101,7 +99,7 @@ app.post('/fblogin', (request, response) => {
 
       result_json = {error: false, result: login_result};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -124,14 +122,14 @@ app.post('/fbregister', (request, response) => {
     let result_json;
     try {
       if (fb_account === undefined || auth_token === undefined || user_name === undefined) {
-        throw "Invalid parameters";
+        throw new Error("Invalid parameters");
       }
 
       const reg_result = await facebook.register(fb_account, auth_token, user_name);
 
       result_json = {error: false, result: reg_result};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -150,19 +148,19 @@ app.post('/userinfo', (request, response) => {
     let result_json;
     try {
       if (access_token === undefined) {
-        throw "Invalid parameters";
+        throw new Error("Invalid parameters");
       }
 
       const token_info = user.validateAccessToken(access_token);
       if (token_info.valid !== true) {
-        throw "Invalid access token";
+        throw new Error("Invalid access token");
       }
 
       const user_info = await user.getInfo(token_info.user_id, access_token);
 
       result_json = {error: false, info: user_info};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -181,14 +179,14 @@ app.post('/gameinfo', (request, response) => {
     let result_json;
     try {
       if (game_id === undefined) {
-        throw "Invalid parameters";
+        throw new Error("Invalid parameters");
       }
 
       const game_info = await game.getGameInfo(game_id);
 
       result_json = {error: false, info: game_info};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -208,14 +206,14 @@ app.post('/stocklist', (request, response) => {
     let result_json;
     try {
       if (market_id === undefined) {
-        throw "Invalid parameters";
+        throw new Error("Invalid parameters");
       }
 
       const stock_list = await game.getStockList(market_id);
 
       result_json = {error: false, stock_list: stock_list};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -238,17 +236,17 @@ app.post('/buystock', (request, response) => {
     let result_json;
     try {
       if (amount === undefined || stock_id === undefined || game_id === undefined || access_token === undefined) {
-        throw "Invalid parameters";
+        throw new Error("Invalid parameters");
       }
 
       const token_info = user.validateAccessToken(access_token);
       if (!token_info.valid) {
-        throw "Invalid access token";
+        throw new Error("Invalid access token");
       }
 
       const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
       if (!joined_game) {
-        throw "User has not joined this game";
+        throw new Error("User has not joined this game");
       }
 
       // TODO: only allow buying when stock market is open?
@@ -258,7 +256,7 @@ app.post('/buystock', (request, response) => {
 
       result_json = {error: false, message: 'OK'};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -281,17 +279,17 @@ app.post('/sellstock', (request, response) => {
     let result_json;
     try {
       if (amount === undefined || stock_id === undefined || game_id === undefined || access_token === undefined) {
-        throw "Invalid parameters";
+        throw new Error("Invalid parameters");
       }
 
       const token_info = user.validateAccessToken(access_token);
       if (!token_info.valid) {
-        throw "Invalid access token";
+        throw new Error("Invalid access token");
       }
 
       const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
       if (!joined_game) {
-        throw "User has not joined this game";
+        throw new Error("User has not joined this game");
       }
 
       // TODO: only allow selling when stock market is open?
@@ -301,7 +299,7 @@ app.post('/sellstock', (request, response) => {
 
       result_json = {error: false, message: 'OK'};
     } catch (error) {
-      result_json = {error : true, message: error};
+      result_json = {error : true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -334,7 +332,7 @@ app.post('/joingame', (request, response) => {
 
       result_json = {error: false, message: 'OK'};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -365,14 +363,14 @@ app.post('/leaderboard', (request, response) => {
       // user needs to be part of this game to view leaderboard
       const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
       if (!joined_game) {
-        throw "User has not joined this game";
+        throw new Error("User has not joined this game");
       }
 
       const results = await game.getLeaderboard(game_id);
 
       result_json = {error: false, results: results};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -404,14 +402,14 @@ app.post('/buyhistory', (request, response) => {
       // user needs to have joined this game
       const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
       if (!joined_game) {
-        throw "User has not joined this game";
+        throw new Error("User has not joined this game");
       }
 
       const results = await user.getBuyHistory(token_info.user_id, game_id);
 
       result_json = {error: false, results: results};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -443,14 +441,14 @@ app.post('/sellhistory', (request, response) => {
       // user needs to have joined this game
       const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
       if (!joined_game) {
-        throw "User has not joined this game";
+        throw new Error("User has not joined this game");
       }
 
       const results = await user.getSellHistory(token_info.user_id, game_id);
 
       result_json = {error: false, results: results};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -483,7 +481,7 @@ app.post('/followuser', (request, response) => {
 
       result_json = {error: false, result: result};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -516,7 +514,7 @@ app.post('/unfollowuser', (request, response) => {
 
       result_json = {error: false, result: result};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -540,7 +538,7 @@ app.post('/userpublicinfo', (request, response) => {
 
       result_json = {error: false, results: results};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -569,7 +567,7 @@ app.post('/followerlist', (request, response) => {
 
       result_json = {error: false, results: results};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -598,7 +596,7 @@ app.post('/followinglist', (request, response) => {
 
       result_json = {error: false, results: results};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);
@@ -631,7 +629,7 @@ app.post('/sendusermsg_tst', (request, response) => {
 
       result_json = {error: false, result: result};
     } catch (error) {
-      result_json = {error: true, message: error};
+      result_json = {error: true, message: error.message};
     }
 
     writeJSON(response, result_json);

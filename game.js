@@ -1,6 +1,8 @@
 const db = require('./database');
 const user = require('./user');
 
+const settings = require('./settings.json');
+
 const getStockPrice = (stock_id) => {
   return new Promise(async (resolve, reject) => {
     let sql = `SELECT price FROM stock WHERE id='${stock_id}'`;
@@ -8,7 +10,7 @@ const getStockPrice = (stock_id) => {
     try {
       const results = await db.query(sql);
       if (results.length !== 1) {
-        reject("GETSTOCKPRICE_NOT_FOUND");
+        throw new Error("GETSTOCKPRICE_NOT_FOUND");
       }
       resolve(results[0].price);
     } catch (error) {
@@ -24,13 +26,35 @@ const getGameInfo = (game_id) => {
     try {
       const results = await db.query(sql);
       if (results.length !== 1) {
-        reject("GETGAMEINFO_NOT_FOUND");
+        throw new Error("GETGAMEINFO_NOT_FOUND");
       }
       resolve(results[0]);
     } catch (error) {
       reject(error);
     }
   });
+};
+
+const getGameID = (game_name) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT id FROM game WHERE name='${game_name}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("GETGAMEID_NOT_FOUND");
+      }
+      resolve(result[0].id);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const hashGamePassword = (password) => {
+  const hash = crypto.createHash('sha256');
+  hash.update(`${password}.${settings.db_gamepass_salt}`);
+  return hash.digest('hex');
 };
 
 
@@ -47,7 +71,7 @@ module.exports = {
       try {
         const results = await db.query(sql);
         if (results.length !== 1) {
-          reject("GETGAMEINFO_NOT_FOUND");
+          throw new Error("GETGAMEINFO_NOT_FOUND");
         }
         resolve(results);
       } catch (error) {
@@ -147,6 +171,93 @@ module.exports = {
     });
   },
 
+
+  // Create open game: no owner, no duration, no password
+  createOpenGame: (name, description, base_funds) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `
+          INSERT INTO game(owner_id, pass, game_type, name, description, base_funds, start_time, end_time)
+          VALUES(NULL, NULL, 'open', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("CREATEOPENGAME_FAIL");
+        }
+
+        // return new game id
+        const new_game_id = await getGameID(name);
+        resolve(new_game_id);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  // Create seasonal game: no owner, no password, fixed duration
+  createSeasonalGame: (name, description, base_funds, start_time, end_time) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `
+          INSERT INTO game(owner_id, pass, game_type, name, description, base_funds, start_time, end_time)
+          VALUES(NULL, NULL, 'season', '${name}', '${description}', '${base_funds}', ${start_time}', '${end_time}')`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1){
+          throw new Error("CREATESEASONALGAME_FAIL");
+        }
+
+        // return new game id
+        const new_game_id = await getGameID(name);
+        resolve(new_game_id);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  // Create private game: owner, password, no duration
+  createPrivateGame: (owner_id, password, name, description, base_funds) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const hashed_pw = hashGamePassword(password);
+
+        let sql = `
+          INSERT INTO game(owner_id, pass, game_type, name, description, start_time, end_time)
+          VALUES('${owner_id}', '${hashed_pw}', 'private', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("CREATEPRIVATEGAME_FAIL");
+        }
+
+        // return new game id
+        const new_game_id = await getGameID(name);
+        resolve(new_game_id);
+      } catch (error) {
+        reject(error);
+      }
+    })
+  },
+
+  removeGame: (game_id) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `DELETE FROM game WHERE game_id='${game_id}'`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("REMOVEGAME_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+
+
   // ***************************************************************************
   // Attempts to buy stock with given user
   // ***************************************************************************
@@ -158,7 +269,7 @@ module.exports = {
 
         const needed_funds = Number(amount) * Number(stock_price);
         if (needed_funds > user_funds) {
-          reject("BUYSTOCK_NOT_ENOUGH");
+          throw new Error("BUYSTOCK_NOT_ENOUGH");
         }
 
         // start buy transaction
@@ -189,7 +300,7 @@ module.exports = {
         console.log(`user stock = ${user_stock}`);
 
         if (user_stock < amount) {
-          reject("SELLSTOCK_NOT_ENOUGH");
+          throw new Error("SELLSTOCK_NOT_ENOUGH");
         }
 
         const rewarded_funds = Number(amount) * Number(stock_price);
