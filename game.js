@@ -51,6 +51,24 @@ const getGameID = (game_name) => {
   });
 };
 
+const isGameActive = (game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+      SELECT (IF(CURRENT_TIMESTAMP >= start_time, true, false) AND IF(CURRENT_TIMESTAMP < end_time, true, false)) AS 'active'
+      FROM game WHERE id='${game_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("ISGAMEACTIVE_NOT_FOUND");
+      }
+      resolve(result[0].active);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const hashGamePassword = (password) => {
   const hash = crypto.createHash('sha256');
   hash.update(`${password}.${settings.db_gamepass_salt}`);
@@ -65,8 +83,9 @@ module.exports = {
   // ***************************************************************************
   getGameInfo: (game_id) => {
     return new Promise(async (resolve, reject) => {
-      let sql = `SELECT name, description, start_time, end_time `;
-      sql += `FROM game WHERE id='${game_id}'`;
+      let sql = `
+        SELECT name, description, start_time, end_time, game_type, base_funds, pass 
+        FROM game WHERE id='${game_id}'`;
 
       try {
         const results = await db.query(sql);
@@ -100,7 +119,7 @@ module.exports = {
   // ***************************************************************************
   // Get the leaderboard for the given game
   // ***************************************************************************
-  getLeaderboard: (game_id) => {
+  getLeaderboard: (game_id, start, amount) => {
     return new Promise(async (resolve, reject) => {
       let sql = `
         SELECT u.username, u.image, SUM(assets) AS 'net_worth'
@@ -122,7 +141,8 @@ module.exports = {
         WHERE final.stock_id=stock.id
         ) AS a, user_account AS u
         WHERE u.id=user_id 
-        GROUP BY user_id`;
+        GROUP BY user_id 
+        LIMIT '${start}', '${amount}'`;
 
       try {
         const results = await db.query(sql);
@@ -152,16 +172,33 @@ module.exports = {
   // ***************************************************************************
   // Attempts to add the given user to the given game
   // ***************************************************************************
-  joinGame: (game_id, user_id) => {
+  joinGame: (game_id, user_id, password) => {
     return new Promise(async (resolve, reject) => {
       try {
         const game_info = await getGameInfo(game_id);
 
-        // TODO: check password if private game
-        // TODO: check if game is active (start_time, end_time)
+        switch (game_info.game_type) {
+          case 'private': {
+            // check password for private games
+            const hashed_pw = hashGamePassword(password);
+            if (game_info.pass !== hashed_pw) {
+              throw new Error("JOINGAME_WRONG_PASS");
+            }
+            break;
+          }
+          case 'season': {
+            // check active time for seasonal games
+            const game_active = await isGameActive(game_id);
+            if (!game_active) {
+              throw new Error("JOINGAME_NOT_ACTIVE");
+            }
+            break;
+          }
+        }
 
-        let sql = `INSERT INTO user_game(user_id, game_id, funds) `;
-        sql += `VALUES('${user_id}', '${game_id}', '${game_info.base_funds}')`;
+        let sql = `
+          INSERT INTO user_game(user_id, game_id, funds) 
+          VALUES('${user_id}', '${game_id}', '${game_info.base_funds}')`;
 
         const results = await db.query(sql);
         resolve('OK');

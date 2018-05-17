@@ -130,7 +130,7 @@ const generateAccessToken = (user_id) => {
 
   // encrypt it
   const iv = crypto.randomBytes(16);
-  const key = settings.db_crypto;
+  const key = settings.access_token_key;
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
   const iv_string = iv.toString('hex');
 
@@ -142,7 +142,7 @@ const generateAccessToken = (user_id) => {
 
 const validateAccessToken = (token) => {
   const iv = new Buffer(token.slice(0, 32), 'hex');
-  const key = settings.db_crypto;
+  const key = settings.access_token_key;
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
   const ct = token.slice(32, 128);
 
@@ -240,6 +240,19 @@ module.exports = {
           throw new Error("ISUSERACTIVATED_NOT_FOUND");
         }
         resolve(result[0].activated);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+
+  getAllUsers: () => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `SELECT id, username, account_link, email, signup_date FROM user_account`;
+
+      try {
+        const result = await db.query(sql);
       } catch (error) {
         reject(error);
       }
