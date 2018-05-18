@@ -505,5 +505,19 @@ module.exports = {
         reject(error);
       }
     });
-  }
+  },
+
+
+  getAllGames: () => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `SELECT * FROM game`;
+
+        const results = await db.query(sql);
+        resolve(results);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
 };

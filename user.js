@@ -210,6 +210,38 @@ module.exports = {
     });
   },
 
+  banUser: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `UPDATE user_account SET suspend_end=DATE('9999-12-31') WHERE id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("BANUSER_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  unbanUser: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `UPDATE user_account SET suspend_end=NULL WHERE id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("UNBANUSER_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
   isUserSuspended: (user_id) => {
     return new Promise(async (resolve, reject) => {
       let sql = `
@@ -687,6 +719,23 @@ module.exports = {
       }
     });
   },
+
+
+  // Get a list of avatar options available to user
+  getAvatarOptions: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      // TODO
+    });
+  },
+
+
+  // Make new avatar for user. Upload it to S3.
+  setUserAvatar: (user_id, avatar) => {
+    return new Promise(async (resolve, reject) => {
+      // TODO
+    });
+  },
+
 
 };
 
