@@ -85,6 +85,30 @@ const isGameClosed = (game_id) => {
   });
 };
 
+const isTradingOpen = (game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+      SELECT (
+      IF(WEEKDAY(CURRENT_DATE) >= 1, true, false) AND
+      IF(WEEKDAY(CURRENT_DATE) <= 5, true, false) AND
+      IF(CURRENT_TIME >= m.open_hour, true, false) AND
+      IF(CURRENT_TIME <= m.close_hour, true, false)
+      ) AS 'trading_open'
+      FROM stock_market AS m, game AS g
+      WHERE g.market_id=m.id AND g.id='${game_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("ISTRADINGOPEN_NOT_FOUND");
+      }
+      resolve(result[0].trading_open);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 // ***************************************************************************
 // Returns true if user has joined the given game
 // ***************************************************************************
@@ -230,12 +254,13 @@ module.exports = {
 
 
   // Create open game: no owner, no duration, no password
-  createOpenGame: (name, description, base_funds) => {
+  createOpenGame: (name, description, base_funds, market_id) => {
     return new Promise(async (resolve, reject) => {
       try {
         let sql = `
-          INSERT INTO game(owner_id, pass, game_type, name, description, base_funds, start_time, end_time)
-          VALUES(NULL, NULL, 'open', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
+          INSERT INTO
+          game(owner_id, market_id, pass, game_type, name, description, base_funds, start_time, end_time)
+          VALUES(NULL, '${market_id}', NULL, 'open', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
 
         const result = await db.query(sql);
         if (result.affectedRows !== 1) {
@@ -252,12 +277,13 @@ module.exports = {
   },
 
   // Create seasonal game: no owner, no password, fixed duration
-  createSeasonalGame: (name, description, base_funds, start_time, end_time) => {
+  createSeasonalGame: (name, description, base_funds, market_id, start_time, end_time) => {
     return new Promise(async (resolve, reject) => {
       try {
         let sql = `
-          INSERT INTO game(owner_id, pass, game_type, name, description, base_funds, start_time, end_time)
-          VALUES(NULL, NULL, 'season', '${name}', '${description}', '${base_funds}', ${start_time}', '${end_time}')`;
+          INSERT INTO
+          game(owner_id, market_id, pass, game_type, name, description, base_funds, start_time, end_time)
+          VALUES(NULL, '${market_id}', NULL, 'season', '${name}', '${description}', '${base_funds}', ${start_time}', '${end_time}')`;
 
         const result = await db.query(sql);
         if (result.affectedRows !== 1){
@@ -274,14 +300,15 @@ module.exports = {
   },
 
   // Create private game: owner, password, no duration
-  createPrivateGame: (owner_id, password, name, description, base_funds) => {
+  createPrivateGame: (owner_id, password, name, description, base_funds, market_id) => {
     return new Promise(async (resolve, reject) => {
       try {
         const hashed_pw = hashGamePassword(password);
 
         let sql = `
-          INSERT INTO game(owner_id, pass, game_type, name, description, start_time, end_time)
-          VALUES('${owner_id}', '${hashed_pw}', 'private', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
+          INSERT INTO
+          game(owner_id, market_id, pass, game_type, name, description, start_time, end_time)
+          VALUES('${owner_id}', '${market_id}', ${hashed_pw}', 'private', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
 
         const result = await db.query(sql);
         if (result.affectedRows !== 1) {
@@ -404,7 +431,7 @@ module.exports = {
           throw new Error("BUYSTOCK_GAME_CLOSED");
         }
 
-        const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+        const joined_game = await hasPlayerJoinedGame(token_info.user_id, game_id);
         if (!joined_game) {
           throw new Error("BUYSTOCK_NOT_JOINED");
         }
