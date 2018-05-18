@@ -253,6 +253,24 @@ module.exports = {
 
       try {
         const result = await db.query(sql);
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+
+  getUserGames: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `
+        SELECT g.id, g.game_type, g.name, g.description, g.start_time, g.end_time
+        FROM game AS g, user_game AS ug
+        WHERE g.id=ug.game_id AND ug.user_id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        resolve(result);
       } catch (error) {
         reject(error);
       }

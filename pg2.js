@@ -244,14 +244,6 @@ app.post('/buystock', (request, response) => {
         throw new Error("Invalid access token");
       }
 
-      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
-      if (!joined_game) {
-        throw new Error("User has not joined this game");
-      }
-
-      // TODO: only allow buying when stock market is open?
-      // TODO: only allow buying when game is active (start_time, end_time)
-
       const results = await game.buyStock(game_id, token_info.user_id, stock_id, amount);
 
       result_json = {error: false, message: 'OK'};
@@ -286,14 +278,6 @@ app.post('/sellstock', (request, response) => {
       if (!token_info.valid) {
         throw new Error("Invalid access token");
       }
-
-      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
-      if (!joined_game) {
-        throw new Error("User has not joined this game");
-      }
-
-      // TODO: only allow selling when stock market is open?
-      // TODO: only allow selling when game is active (start_time, end_time)
 
       const results = await game.sellStock(game_id, token_info.user_id, stock_id, amount);
 

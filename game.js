@@ -21,7 +21,7 @@ const getStockPrice = (stock_id) => {
 
 const getGameInfo = (game_id) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `SELECT base_funds, private, pass, start_time, end_time FROM game WHERE id='${game_id}'`;
+    let sql = `SELECT base_funds, private, pass, start_time, end_time, closed FROM game WHERE id='${game_id}'`;
 
     try {
       const results = await db.query(sql);
@@ -69,6 +69,38 @@ const isGameActive = (game_id) => {
   });
 };
 
+const isGameClosed = (game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT IF(closed != 0, true, false) AS 'closed' FROM game WHERE id='${game_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("ISGAMECLOSED_NOT_FOUND");
+      }
+      resolve(result[0].closed);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// ***************************************************************************
+// Returns true if user has joined the given game
+// ***************************************************************************
+const hasPlayerJoinedGame = (user_id, game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT * FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
+
+    try {
+      const results = await db.query(sql);
+      resolve(results.length === 1);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const hashGamePassword = (password) => {
   const hash = crypto.createHash('sha256');
   hash.update(`${password}.${settings.db_gamepass_salt}`);
@@ -81,10 +113,10 @@ module.exports = {
   // ***************************************************************************
   // Gets information about the given game
   // ***************************************************************************
-  getGameInfo: (game_id) => {
+  getPublicGameInfo: (game_id) => {
     return new Promise(async (resolve, reject) => {
       let sql = `
-        SELECT name, description, start_time, end_time, game_type, base_funds, pass 
+        SELECT name, description, start_time, end_time
         FROM game WHERE id='${game_id}'`;
 
       try {
@@ -154,28 +186,16 @@ module.exports = {
   },
 
   // ***************************************************************************
-  // Returns true if user has joined the given game
-  // ***************************************************************************
-  hasPlayerJoinedGame: (user_id, game_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `SELECT * FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
-
-      try {
-        const results = await db.query(sql);
-        resolve(results.length === 1);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  // ***************************************************************************
   // Attempts to add the given user to the given game
   // ***************************************************************************
   joinGame: (game_id, user_id, password) => {
     return new Promise(async (resolve, reject) => {
       try {
         const game_info = await getGameInfo(game_id);
+
+        if (game_info.closed) {
+          throw new Error("JOINGAME_CLOSED");
+        }
 
         switch (game_info.game_type) {
           case 'private': {
@@ -277,14 +297,79 @@ module.exports = {
     })
   },
 
-  removeGame: (game_id) => {
+  setGameClosed: (game_id, closed) => {
     return new Promise(async (resolve, reject) => {
       try {
-        let sql = `DELETE FROM game WHERE game_id='${game_id}'`;
+        let cn = closed ? 1 : 0;
+        let sql = `UPDATE game SET closed='${cn}' WHERE id='${game_id}'`;
 
         const result = await db.query(sql);
         if (result.affectedRows !== 1) {
-          throw new Error("REMOVEGAME_FAIL");
+          throw new Error("CLOSEGAME_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  editGameDescription: (game_id, new_description) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `UPDATE game SET description='${new_description}' WHERE id='${game_id}'`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("EDITGAMEDESCRIPTION_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  editGameName: (game_id, new_name) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `UPDATE game SET name='${new_name}' WHERE id='${game_id}'`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("EDITGAMENAME_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  editGameStartTime: (game_id, start_time) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `UPDATE game SET start_time='${start_time}' WHERE id='${game_id}'`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("EDITGAMESTARTTIME_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  editGameEndTime: (game_id, end_time) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let sql = `UPDATE game SET end_time='${end_time}' WHERE id='${game_id}'`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("EDITGAMEENDTIME_FAIL");
         }
         resolve('OK');
       } catch (error) {
@@ -309,9 +394,32 @@ module.exports = {
           throw new Error("BUYSTOCK_NOT_ENOUGH");
         }
 
+        const game_info = await getGameInfo(game_id);
+
+        // TODO: only allow buying when stock market is open?
+        // TODO: only allow buying when game is active (start_time, end_time)
+
+        const game_closed = await isGameClosed(game_id);
+        if (game_closed) {
+          throw new Error("BUYSTOCK_GAME_CLOSED");
+        }
+
+        const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+        if (!joined_game) {
+          throw new Error("BUYSTOCK_NOT_JOINED");
+        }
+
+        if (game_info.game_type === 'season') {
+          const game_active = await isGameActive(game_id);
+          if (!game_active) {
+            throw new Error("BUYSTOCK_GAME_INACTIVE");
+          }
+        }
+
         // start buy transaction
-        let stock_sql = `INSERT INTO stock_event(user_id, stock_id, game_id, amount, transaction_type, unit_price) `;
-        stock_sql += `VALUES('${user_id}', '${stock_id}', '${game_id}', '${amount}', 'B', '${stock_price}')`;
+        let stock_sql = `
+          INSERT INTO stock_event(user_id, stock_id, game_id, amount, transaction_type, unit_price)
+          VALUES('${user_id}', '${stock_id}', '${game_id}', '${amount}', 'B', '${stock_price}')`;
 
         let funds_sql = `UPDATE user_game SET funds=funds-'${needed_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
@@ -331,20 +439,35 @@ module.exports = {
     return new Promise(async (resolve, reject) => {
       try {
         const stock_price = await getStockPrice(stock_id);
-
         const user_stock = await user.getUserStock(user_id, game_id, stock_id);
-
-        console.log(`user stock = ${user_stock}`);
 
         if (user_stock < amount) {
           throw new Error("SELLSTOCK_NOT_ENOUGH");
         }
 
+        const game_info = await getGameInfo(game_id);
+
+        // TODO: only allow selling when stock market is open?
+        // TODO: only allow selling when game is active (start_time, end_time)
+
+        const joined_game = await hasPlayerJoinedGame(user_id, game_id);
+        if (!joined_game) {
+          throw new Error("SELLSTOCK_NOT_JOINED");
+        }
+
+        if (game_info.game_type === 'season') {
+          const game_active = await isGameActive(game_id);
+          if (!game_active) {
+            throw new Error("SELLSTOCK_GAME_INACTIVE");
+          }
+        }
+
         const rewarded_funds = Number(amount) * Number(stock_price);
 
         // start sell transaction
-        let stock_sql = `INSERT INTO stock_event(user_id, stock_id, game_id, amount, transaction_type, unit_price) `;
-        stock_sql += `VALUES('${user_id}', '${stock_id}', '${game_id}', '${amount}', 'S', '${stock_price}')`;
+        let stock_sql = `
+          INSERT INTO stock_event(user_id, stock_id, game_id, amount, transaction_type, unit_price)
+          VALUES('${user_id}', '${stock_id}', '${game_id}', '${amount}', 'S', '${stock_price}')`;
 
         let funds_sql = `UPDATE user_game SET funds=funds+'${rewarded_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
