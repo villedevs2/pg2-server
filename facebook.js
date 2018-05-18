@@ -86,9 +86,9 @@ const registerWithFB = (fb_account, user_name) => {
   return new Promise(async (resolve, reject) => {
     const token = hashFBAccount(fb_account);
 
-    let sql = '';
-    sql += `INSERT INTO user_account(username, account_link, access_token, signup_date) `;
-    sql += `VALUES('${user_name}', '${token}', NULL, CURRENT_TIMESTAMP)`;
+    let sql = `
+      INSERT INTO user_account(username, account_link, account_status, access_token, signup_date)
+      VALUES('${user_name}', '${token}', 'active', NULL, CURRENT_TIMESTAMP)`;
 
     try {
       const results = await db.query(sql);
@@ -153,61 +153,11 @@ module.exports = {
           throw new Error("FBLOGIN_USER_ID_NOT_FOUND");
         }
 
-        const access_token = user.generateAccessToken(user_id);
-
-        const update_ok = await user.updateAccessToken(user_id, access_token);
-        if (!update_ok) {
-          throw new Error("FBLOGIN_ACCESS_TOKEN");
-        }
-
-        resolve({token: access_token});
+        const login_ok = await user.commonLogin(user_id);
+        resolve(login_ok);
       } catch (error) {
         reject(error);
       }
-
-      /*
-      // verify from Facebook that this is a valid access token for this user
-      isValidFBToken(auth_token, fb_account).then((valid) => {
-        if (!valid) {
-          reject("Invalid access token");
-        }
-
-        isFBAccountRegistered(fb_account).then((exists) => {
-          // if account exists, try to login
-          if (!exists) {
-            reject("Account doesn't exist");
-          }
-
-          getUserID(fb_account).then((user_id) => {
-            if (user_id === null) {
-              reject("User ID not found");
-            }
-
-            const access_token = user.generateAccessToken();
-
-            user.updateAccessToken(user_id, access_token).then((response) => {
-              if (response) {
-                resolve({user_id: user_id, token: access_token});
-              } else {
-                reject("Cannot update access token");
-              }
-            }).catch((error) => {
-              reject(error);
-            });
-
-          }).catch((error) => {
-            reject(error);
-          });
-
-        }).catch((error) => {
-          reject(error);
-        });
-
-      }).catch((error) => {
-        reject(error);
-      });
-      */
-
     });
   },
 
@@ -240,82 +190,11 @@ module.exports = {
           throw new Error("FBREGISTER_USER_ID_NOT_FOUND");
         }
 
-        // try to update the access token
-        const access_token = user.generateAccessToken(user_id);
-        const update_ok = await user.updateAccessToken(user_id, access_token);
-        if (!update_ok) {
-          throw new Error("FBREGISTER_ACCESS_TOKEN");
-        }
-
-        // all ok!
-        resolve({token: access_token});
+        const login_ok = await user.commonLogin(user_id);
+        resolve(login_ok);
       } catch (error) {
         reject(error);
       }
-
-/*
-      // first check for valid FB token
-      isValidFBToken(auth_token, fb_account).then((valid) => {
-        if (!valid) {
-          reject("Invalid access token");
-        }
-
-        // check if the account already exists
-        isFBAccountRegistered(fb_account).then((exists) => {
-          // if not, try to register
-          if (exists) {
-            reject("Account already exists");
-          }
-
-          // check if the username already exists
-          isUsernameRegistered(user_name).then((username_exists) => {
-            // if not, try to register
-            if (username_exists) {
-              reject("Username already exists");
-            }
-
-            registerWithFB(fb_account, user_name).then((result) => {
-              // if registering worked, try to login
-              if (!result) {
-                reject("Registering failed");
-              }
-
-              getUserID(fb_account).then((user_id) => {
-                if (user_id === null) {
-                  reject("User ID not found");
-                }
-
-                const access_token = user.generateAccessToken();
-                user.updateAccessToken(user_id, access_token).then((response) => {
-                  if (response) {
-                    resolve({user_id: user_id, token: access_token});
-                  } else {
-                    reject("Cannot update access token");
-                  }
-                }).catch((error) => {
-                  reject(error);
-                });
-
-              }).catch((error) => {
-                reject(error);
-              });
-
-            }).catch((error) => {
-              reject(error);
-            });
-
-          }).catch((error) => {
-            reject(error);
-          });
-
-        }).catch((error) => {
-          reject(error);
-        });
-
-      }).catch((error) => {
-        reject(error);
-      });
-*/
     });
   },
 };

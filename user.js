@@ -554,6 +554,39 @@ module.exports = {
     });
   },
 
+  commonLogin: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // check if account is activated
+        const account_active = await
+        user.isUserActivated(user_id);
+        if (!account_active) {
+          throw new Error("COMMONLOGIN_ACCOUNT_INACTIVE");
+        }
+
+        // check for account suspension
+        const account_suspended = await
+        user.isUserSuspended(user_id);
+        if (account_suspended) {
+          throw new Error("COMMONLOGIN_ACCOUNT_SUSPENDED");
+        }
+
+        // try to update the access token
+        const access_token = generateAccessToken(user_id);
+        const update_ok = await
+        updateAccessToken(user_id, access_token);
+        if (!update_ok) {
+          throw new Error("COMMONLOGIN_ACCESS_TOKEN");
+        }
+
+        // all ok!
+        resolve({token: access_token});
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
   // ***************************************************************************
   // Try to login with email/password
   // ***************************************************************************
@@ -588,15 +621,8 @@ module.exports = {
           throw new Error("EMLOGIN_USER_ID")
         }
 
-        // try to update the access token
-        const access_token = generateAccessToken(user_id);
-        const update_ok = await updateAccessToken(user_id, access_token);
-        if (!update_ok) {
-          throw new Error("EMLOGIN_ACCESS_TOKEN");
-        }
-
-        // all ok!
-        resolve({token: access_token});
+        const login_ok = await user.commonLogin(user_id);
+        resolve(login_ok);
       } catch (error) {
         reject(error);
       }
@@ -654,15 +680,8 @@ module.exports = {
           throw new Error("EMREGISTER_FAIL");
         }
 
-        // try to update the access token
-        const access_token = generateAccessToken(user_id);
-        const update_ok = await updateAccessToken(user_id, access_token);
-        if (!update_ok) {
-          throw new Error("EMREGISTER_ACCESS_TOKEN");
-        }
-
-        // all ok!
-        resolve({token: access_token});
+        const login_ok = await user.commonLogin(user_id);
+        resolve(login_ok);
       } catch (error) {
         reject(error);
       }
