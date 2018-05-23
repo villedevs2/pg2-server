@@ -110,9 +110,7 @@ const updateOMXH = async () => {
 
     // get all stock entries
     market_lists.forEach((market_list) => {
-      market_list.forEach((stock_item) => {
-        stock_entries.push(stock_item);
-      });
+      stock_entries = stock_entries.concat(market_list);
     });
 
     let update_entries = [];
