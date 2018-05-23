@@ -85,7 +85,7 @@ const parseStockData = (html, market) => {
             fullname: name,
             price: price,
             change: change,
-            market_id: market
+            listname: market
           };
 
           stock_entries.push(stock_entry);

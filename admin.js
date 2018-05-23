@@ -43,7 +43,7 @@ const validateAdminToken = (token) => {
   const version = buffer.readUInt16BE(0);
   const token_id = buffer.slice(2, 7).toString('utf8');
 
-  return {valid: (version === ADMIN_TOKEN_VERSION && token_id === ADMIN_TOKEN_ID)};
+  return (version === ADMIN_TOKEN_VERSION && token_id === ADMIN_TOKEN_ID);
 };
 
 

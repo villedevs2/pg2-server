@@ -135,7 +135,7 @@ const hashGamePassword = (password) => {
 
 module.exports = {
   // ***************************************************************************
-  // Gets information about the given game
+  // Gets the public information about a given game
   // ***************************************************************************
   getPublicGameInfo: (game_id) => {
     return new Promise(async (resolve, reject) => {
@@ -158,10 +158,67 @@ module.exports = {
   // ***************************************************************************
   // Gets the list of stock for the given market
   // ***************************************************************************
-  getStockList: (market_id) => {
+  getStockList: (game_id) => {
     return new Promise(async (resolve, reject) => {
-      let sql = `SELECT symbol, full_name, price, variety, update_date `;
-      sql += `FROM stock WHERE market_id='${market_id}'`;
+      let sql = `
+        SELECT
+        s.symbol AS 'symbol',
+        s.full_name AS 'full_name',
+        s.price AS 'price',
+        s.variety AS 'variety',
+        s.update_date AS 'update_date'
+        FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'`;
+
+      try {
+        const results = await db.query(sql);
+        resolve(results);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+
+  getStockRisers: (game_id, amount) => {
+    return new Promise(async (resolve, reject) => {
+      if (amount === null) {
+        amount = 5;
+      }
+
+      let sql = `
+        SELECT
+        s.symbol AS 'symbol',
+        s.full_name AS 'full_name',
+        s.price AS 'price',
+        s.variety AS 'variety',
+        s.update_date AS 'update_date'
+        FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'
+        ORDER BY s.variety LIMIT '${amount}'`;
+
+      try {
+        const results = await db.query(sql);
+        resolve(results);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  getStockFallers: (game_id, amount) => {
+    return new Promise(async (resolve, reject) => {
+      if (amount === null) {
+        amount = 5;
+      }
+
+      let sql = `
+        SELECT
+        s.symbol AS 'symbol',
+        s.full_name AS 'full_name',
+        s.price AS 'price',
+        s.variety AS 'variety',
+        s.update_date AS 'update_date'
+        FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'
+        ORDER BY s.variety DESC LIMIT '${amount}'`;
 
       try {
         const results = await db.query(sql);
