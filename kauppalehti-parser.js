@@ -98,7 +98,8 @@ const parseStockData = (html, market) => {
 };
 
 module.exports = {
-  fetchStockData: (url, market) => {
+  fetchStockData: (market) => {
+    const url = `https://beta.kauppalehti.fi/porssi/kurssit/${market}`;
     return new Promise((resolve, reject) => {
       https.get(url, (res) => {
         let body = '';

@@ -101,8 +101,8 @@ const updateOMXH = async () => {
     const market_id = await getMarketID('OMXH');
 
     let stocks = [];
-    stocks.push(kauppalehti.fetchStockData('https://beta.kauppalehti.fi/porssi/kurssit/XHEL', 'XHEL'));
-    stocks.push(kauppalehti.fetchStockData('https://beta.kauppalehti.fi/porssi/kurssit/FNFI', 'FNFI'));
+    stocks.push(kauppalehti.fetchStockData('XHEL'));
+    stocks.push(kauppalehti.fetchStockData('FNFI'));
 
     const market_lists = await Promise.all(stocks);
 
