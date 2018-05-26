@@ -23,30 +23,33 @@ const badge = {
 };
 
 
-const makeAvatar = async () => {
-  const canvas = createCanvas(avatar.width, avatar.height);
-  const context = canvas.getContext('2d');
+const makeAvatar = () => {
+  return new Promise(async (resolve, reject) => {
+    const canvas = createCanvas(avatar.width, avatar.height);
+    const context = canvas.getContext('2d');
 
-  try {
-    const base_image = await loadImage('imagestack/avatar_test_base.png');
-    const frame_image = await loadImage('imagestack/avatar_test_frame.png');
-    const badge_image = await loadImage('imagestack/avatar_test_badge.png');
+    try {
+      const base_image = await loadImage('imagestack/avatar_test_base.png');
+      const frame_image = await loadImage('imagestack/avatar_test_frame.png');
+      const badge_image = await loadImage('imagestack/avatar_test_badge.png');
 
-    context.drawImage(base_image, base.x, base.y);
-    context.drawImage(frame_image, frame.x, frame.y);
-    context.drawImage(badge_image, badge.x, badge.y);
+      context.drawImage(base_image, base.x, base.y);
+      context.drawImage(frame_image, frame.x, frame.y);
+      context.drawImage(badge_image, badge.x, badge.y);
 
-    sharp(canvas.toBuffer())
-    .toFormat(sharp.format.webp)
-    .toFile('output.webp', (error, info) => {
-      if (error !== null) {
-        console.log(error);
-      }
-      //console.log(info);
-    });
-  } catch (error) {
-    console.log(error);
-  }
+      sharp(canvas.toBuffer())
+      .toFormat(sharp.format.webp)
+      .toFile('output.webp', (error, info) => {
+        if (error !== null) {
+          throw new Error(error);
+        }
+        //console.log(info);
+        resolve('OK');
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
 };
 
 makeAvatar();

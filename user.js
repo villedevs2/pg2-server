@@ -278,6 +278,58 @@ module.exports = {
     });
   },
 
+  addPremium: (user_id, num_days) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // check if user already has premium active
+        const has_premium = await user.hasPremium(user_id);
+
+        const hours = num_days * 24;
+
+        let sql;
+        if (has_premium) {
+          // add more time to existing premium
+          sql = `
+            UPDATE user_account
+            SET premium_end=ADD_TIME(premium_end, '${hours}:00:00')
+            WHERE id='${user_id}'`;
+        } else {
+          // start new premium
+          sql = `
+            UPDATE user_account
+            SET premium_end=ADD_TIME(CURRENT_TIMESTAMP, '${hours}:00:00'
+            WHERE id='${user_id}'`;
+        }
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("ADDPREMIUM_FAIL");
+        }
+        resolve('OK');
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  hasPremium: (user_id) => {
+    return new Promise(async (resolve, reject) => {
+      let sql = `
+        SELECT IF(CURRENT_TIMESTAMP < premium_end, true, false) AS 'premium'
+        FROM user_account WHERE id='${user_id}'`;
+
+      try {
+        const result = await db.query(sql);
+        if (result.length !== 1) {
+          throw new Error("HASPREMIUM_NOT_FOUND");
+        }
+        resolve(result[0].premium);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
 
   getAllUsers: () => {
     return new Promise(async (resolve, reject) => {
@@ -714,6 +766,34 @@ module.exports = {
 
         const login_ok = await user.commonLogin(user_id);
         resolve(login_ok);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
+
+  editUserName: (user_id, new_username) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // validate username
+        const valid_username = username_regex.exec(new_username) !== null;
+        if (!valid_username) {
+          throw new Error("EDITUSERNAME_INVALID_USERNAME");
+        }
+
+        const exists = await doesUsernameExist(new_username);
+        console.log(exists);
+        if (exists) {
+          throw new Error("EDITUSERNAME_USERNAME_EXISTS");
+        }
+
+        let sql = `UPDATE user_account SET username='${new_username}' WHERE id='${user_id}'`;
+
+        const result = await db.query(sql);
+        if (result.affectedRows !== 1) {
+          throw new Error("EDITUSERNAME_FAIL");
+        }
+        resolve('OK');
       } catch (error) {
         reject(error);
       }
