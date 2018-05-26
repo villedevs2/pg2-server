@@ -3,12 +3,20 @@
 const db = require('./database');
 const crypto = require('crypto');
 const validator = require('validator');
+const fs = require('fs');
+
+const jsdom = require('jsdom');
+const { JSDOM } = jsdom;
 
 const settings = require('./settings.json');
 
 
 const ACCESS_TOKEN_VERSION = 0x0001;
 const ACCESS_TOKEN_ID = 'PGTOKEN';
+
+const ACTIVATION_TOKEN_VERSION = 0x0001;
+const ACTIVATION_TOKEN_ID = 'PGACTIV';
+
 
 
 // regex for username:
@@ -72,11 +80,10 @@ const getUserIDWithEmail = (email) => {
 
     try {
       const results = await db.query(sql);
-      let value = null;
-      if (results.length > 0) {
-        value = results[0].id;
+      if (results.length !== 1) {
+        throw new Error("GETUSERIDWITHEMAIL_NOT_FOUND");
       }
-      resolve(value);
+      resolve(results[0].id);
     } catch (error) {
       reject(error);
     }
@@ -176,6 +183,190 @@ const updateAccessToken = (user_id, access_token) => {
 };
 
 
+const generateActivationToken = (email) => {
+  const header_buffer = Buffer(20);
+  header_buffer.writeUInt16BE(ACTIVATION_TOKEN_VERSION, 0);
+  header_buffer.write(ACTIVATION_TOKEN_ID, 2, 'utf8');
+
+  const random_buffer = crypto.randomBytes(11).toString('hex');
+  header_buffer.write(random_buffer, 9);
+
+  const email_buffer = Buffer.from(email);
+
+  const buffer = Buffer.concat([header_buffer, email_buffer]);
+
+  console.log(header_buffer);
+  console.log(random_buffer);
+  console.log(buffer);
+
+
+  // encrypt it
+  const iv = crypto.randomBytes(16);
+  const key = settings.activation_token_key;
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  const iv_string = iv.toString('hex');
+
+  let encrypted = cipher.update(buffer, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+
+  return `${iv_string}${encrypted}`;
+};
+
+const validateActivationToken = (token) => {
+  const iv = new Buffer(token.slice(0, 32), 'hex');
+  const key = settings.activation_token_key;
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  const ct = token.slice(32);
+
+
+  let decrypted = decipher.update(ct, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  const buffer = Buffer.from(decrypted);
+
+  const version = buffer.readUInt16BE(0);
+  const token_id = buffer.slice(2, 9).toString('utf8');
+  const email = buffer.slice(20);
+
+  return {
+    valid: (version === ACTIVATION_TOKEN_VERSION && token_id === ACTIVATION_TOKEN_ID),
+    email: email,
+  };
+};
+
+const sendActivationMail = (email, username) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const token = generateActivationToken(email);
+
+      const activation_url = `${settings.activation_url}?token=${token}`;
+
+      const mail_title = settings.activation_mail_title;
+      const mail_template = fs.readFileSync(settings.activation_mail_template, 'utf8');
+
+      //console.log(mail_template);
+
+      const dom = new JSDOM(mail_template);
+
+      // fill in username
+      const username_element = dom.window.document.querySelector('#username');
+      if (username_element !== undefined) {
+        username_element.innerHTML = `${username}`;
+      }
+
+      // fill in activation token
+      const token_element = dom.window.document.querySelector('#activation_link');
+      if (token_element !== undefined) {
+        token_element.setAttribute('href', activation_url);
+      }
+
+      const final_html = dom.serialize();
+
+      console.log(final_html);
+
+      // TODO: set up Amazon SES??
+      // TODO: send via mail
+
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+const isUserSuspended = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        SELECT IF(CURRENT_TIMESTAMP < suspend_end, true, false) AS 'suspended'
+        FROM user_account WHERE id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("ISUSERSUSPENDED_NOT_FOUND");
+      }
+      resolve(result[0].suspended);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const isUserActivated = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        SELECT IF(account_status = 'active', true, false) AS 'activated'
+        FROM user_account WHERE id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("ISUSERACTIVATED_NOT_FOUND");
+      }
+      resolve(result[0].activated);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const activateUser = (token) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const token_info = validateActivationToken(token);
+
+      if (!token_info.valid) {
+        throw new Error("ACTIVATEUSER_INVALID_TOKEN");
+      }
+
+      const user_id = await getUserIDWithEmail(token_info.email);
+
+      let sql = `UPDATE user_account SET account_status = 'active' WHERE id='${user_id}'`;
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("ACTIVATEUSER_FAIL");
+      }
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+const commonLogin = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // check if account is activated
+      const account_active = await isUserActivated(user_id);
+      if (!account_active) {
+        throw new Error("COMMONLOGIN_ACCOUNT_INACTIVE");
+      }
+
+      // check for account suspension
+      const account_suspended = await isUserSuspended(user_id);
+      if (account_suspended) {
+        throw new Error("COMMONLOGIN_ACCOUNT_SUSPENDED");
+      }
+
+      // try to update the access token
+      const access_token = generateAccessToken(user_id);
+      const update_ok = await updateAccessToken(user_id, access_token);
+      if (!update_ok) {
+        throw new Error("COMMONLOGIN_ACCESS_TOKEN");
+      }
+
+      // all ok!
+      resolve({token: access_token});
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+
 module.exports = {
   // ***************************************************************************
   // Generate a new access token
@@ -191,6 +382,8 @@ module.exports = {
   // Update the access token for a given user ID
   // ***************************************************************************
   updateAccessToken: updateAccessToken,
+
+  activateUser: activateUser,
 
   suspendUser: (user_id, duration) => {
     return new Promise(async (resolve, reject) => {
@@ -242,41 +435,9 @@ module.exports = {
     });
   },
 
-  isUserSuspended: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        SELECT IF(CURRENT_TIMESTAMP < suspend_end, true, false) AS 'suspended'
-        FROM user_account WHERE id='${user_id}'`;
+  isUserSuspended: isUserSuspended,
 
-      try {
-        const result = await db.query(sql);
-        if (result.length !== 1) {
-          throw new Error("ISUSERSUSPENDED_NOT_FOUND");
-        }
-        resolve(result[0].suspended);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  isUserActivated: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        SELECT IF(account_status == 'active', true, false) AS 'activated'
-        FROM user_account WHERE id='${user_id}'`;
-
-      try {
-        const result = await db.query(sql);
-        if (result.length !== 1) {
-          throw new Error("ISUSERACTIVATED_NOT_FOUND");
-        }
-        resolve(result[0].activated);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+  isUserActivated: isUserActivated,
 
   addPremium: (user_id, num_days) => {
     return new Promise(async (resolve, reject) => {
@@ -638,38 +799,7 @@ module.exports = {
     });
   },
 
-  commonLogin: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // check if account is activated
-        const account_active = await
-        user.isUserActivated(user_id);
-        if (!account_active) {
-          throw new Error("COMMONLOGIN_ACCOUNT_INACTIVE");
-        }
-
-        // check for account suspension
-        const account_suspended = await
-        user.isUserSuspended(user_id);
-        if (account_suspended) {
-          throw new Error("COMMONLOGIN_ACCOUNT_SUSPENDED");
-        }
-
-        // try to update the access token
-        const access_token = generateAccessToken(user_id);
-        const update_ok = await
-        updateAccessToken(user_id, access_token);
-        if (!update_ok) {
-          throw new Error("COMMONLOGIN_ACCESS_TOKEN");
-        }
-
-        // all ok!
-        resolve({token: access_token});
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+  commonLogin: commonLogin,
 
   // ***************************************************************************
   // Try to login with email/password
@@ -705,7 +835,7 @@ module.exports = {
           throw new Error("EMLOGIN_USER_ID")
         }
 
-        const login_ok = await user.commonLogin(user_id);
+        const login_ok = await commonLogin(user_id);
         resolve(login_ok);
       } catch (error) {
         reject(error);
@@ -748,9 +878,9 @@ module.exports = {
         const hashed_pw = hashPassword(password);
 
         // TODO: encrypt email?
-        let sql = '';
-        sql += `INSERT INTO user_account(username, pass, email, access_token, signup_date) `;
-        sql += `VALUES('${username}', '${hashed_pw}', '${email}', NULL, CURRENT_TIMESTAMP)`;
+        let sql = `
+          INSERT INTO user_account(username, pass, email, access_token, signup_date)
+          VALUES('${username}', '${hashed_pw}', '${email}', NULL, CURRENT_TIMESTAMP)`;
 
         const results = await db.query(sql);
 
@@ -759,13 +889,20 @@ module.exports = {
         }
 
         // get user id for the new account
+        /*
         const user_id = await getUserIDWithEmail(email);
         if (user_id === null) {
           throw new Error("EMREGISTER_FAIL");
         }
 
-        const login_ok = await user.commonLogin(user_id);
-        resolve(login_ok);
+        const login_ok = await commonLogin(user_id);
+        */
+
+        // can't login until account is activated
+
+        await sendActivationMail(email, username);
+
+        resolve('OK');
       } catch (error) {
         reject(error);
       }

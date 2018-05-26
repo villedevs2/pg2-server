@@ -81,6 +81,26 @@ app.post('/register', (request, response) => {
 
 });
 
+app.get('/activate', async (request, response) => {
+  const token = request.query.token;
+
+  try {
+    if (token === undefined) {
+      throw new Error("Invalid parameters");
+    }
+
+    const result = await user.activateUser(token);
+
+    // TODO: show success page
+    writeJSON(response, {error: false, result: result});
+  } catch (error) {
+    // TODO: show error page
+    writeJSON(response, {error: true, message: error.message});
+  }
+});
+
+
+
 // *****************************************************************************
 // POST on /fblogin: login via facebook
 // *****************************************************************************
