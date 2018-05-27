@@ -361,6 +361,571 @@ const commonLogin = (user_id) => {
 };
 
 
+const suspendUser = (user_id, duration) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        UPDATE user_account SET suspend_end=CURRENT_TIMESTAMP+'${duration}'
+        WHERE id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("SUSPENDUSER_FAIL");
+      }
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const banUser = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `UPDATE user_account SET suspend_end=DATE('9999-12-31') WHERE id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("BANUSER_FAIL");
+      }
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const unbanUser = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `UPDATE user_account SET suspend_end=NULL WHERE id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("UNBANUSER_FAIL");
+      }
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+const addPremium = (user_id, num_days) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // check if user already has premium active
+      const has_premium = await user.hasPremium(user_id);
+
+      const hours = num_days * 24;
+
+      let sql;
+      if (has_premium) {
+        // add more time to existing premium
+        sql = `
+            UPDATE user_account
+            SET premium_end=DATE_ADD(premium_end, INTERVAL '${hours}' HOUR)
+            WHERE id='${user_id}'`;
+      } else {
+        // start new premium
+        sql = `
+            UPDATE user_account
+            SET premium_end=DATE_ADD(CURRENT_TIMESTAMP, INTERVAL '${hours}' HOUR)
+            WHERE id='${user_id}'`;
+      }
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("ADDPREMIUM_FAIL");
+      }
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const hasPremium = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        SELECT IF(CURRENT_TIMESTAMP < premium_end, true, false) AS 'premium'
+        FROM user_account WHERE id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("HASPREMIUM_NOT_FOUND");
+      }
+      resolve(result[0].premium);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+const getAllUsers = () => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT id, username, account_link, email, signup_date FROM user_account`;
+
+    try {
+      const result = await db.query(sql);
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const getUserGames = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        SELECT g.id, g.game_type, g.name, g.description, g.start_time, g.end_time
+        FROM game AS g, user_game AS ug
+        WHERE g.id=ug.game_id AND ug.user_id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// ***************************************************************************
+// Gets info for a user with User ID and Access Token
+// ***************************************************************************
+// TODO: rename?
+const getInfo = (user_id, access_token) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT username, access_token, signup_date, image `;
+    sql +=    `FROM user_account WHERE id='${user_id}'`;
+
+    try {
+      const results = await db.query(sql);
+      if (results.length !== 1) {
+        throw new Error("GETINFO_NOT_FOUND");
+      }
+      if (results[0].access_token !== access_token) {
+        throw new Error("GETINFO_ACCESS_TOKEN");
+      }
+
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+
+  });
+};
+
+
+// *****************************************************************************
+// Get publicly available info for a user. Does not require token.
+// *****************************************************************************
+const getUserPublicInfo = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const followers = await countUserFollowers(user_id);
+
+      let sql = `SELECT username, signup_date, image FROM user_account WHERE id='${user_id}'`;
+      const results = await db.query(sql);
+
+      if (results.length !== 1) {
+        throw new Error('GETUSERPUBLICINFO_NOT_FOUND');
+      }
+
+      results[0].followers = followers;
+
+      resolve(results[0]);
+    } catch (error) {
+      console.log(error);
+      reject('FAIL');
+    }
+  });
+};
+
+
+// *****************************************************************************
+// Follow a user
+// *****************************************************************************
+const followUser = (user_id, followed_user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `INSERT INTO user_follow(user_id, followed_id) VALUES('${user_id}', '${followed_user_id}')`;
+
+    try {
+      if (user_id === followed_user_id) {
+        throw new Error('FOLLOW_USER_SELF');
+      }
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error('FOLLOW_USER_RESULT');
+      }
+      resolve('OK');
+    } catch (error) {
+      console.log(error);
+      reject('DATABASE_FAIL');
+    }
+  });
+};
+
+// *****************************************************************************
+// Unfollow a user
+// *****************************************************************************
+const unfollowUser = (user_id, followed_user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `DELETE FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error('UNFOLLOW_USER_RESULT');
+      }
+      resolve('OK');
+    } catch (error) {
+      console.log(error);
+      reject('DATABASE_FAIL');
+    }
+  });
+};
+
+// *****************************************************************************
+// Get a list of followers for a user
+// *****************************************************************************
+const getFollowerList = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        SELECT u.id, u.username, u.image, f.follow_date
+        FROM user_account AS u, user_follow AS f
+        WHERE f.followed_id='${user_id}' AND f.user_id=u.id`;
+
+    // TODO: sort by follow date
+
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      console.log(error);
+      reject('DATABASE_FAIL');
+    }
+  });
+};
+
+// *****************************************************************************
+// Get a list of followed users for a user
+// *****************************************************************************
+const getFollowingList = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        SELECT u.id, u.username, u.image, f.follow_date
+        FROM user_account AS u, user_follow AS f
+        WHERE f.user_id='${user_id}' AND f.followed_id=u.id`;
+
+    // TODO: sort by follow date
+
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      console.log(error);
+      reject('DATABASE_FAIL');
+    }
+  });
+};
+
+
+const sendUserMessage = (user_id, sender_id, message) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // validate message contents
+      let message_sane = validator.escape(message.message);
+      message_sane = validator.stripLow(message_sane, true);
+
+      // validate message title
+      let title_sane = validator.escape(message.title);
+      title_sane = validator.stripLow(title_sane, true);
+
+      if (sender_id === null) {
+        sender_id = 'NULL';
+      } else {
+        sender_id = `'${sender_id}'`;
+      }
+
+
+      let sql = `
+          INSERT INTO user_message(user_id, sender_id, title, message)
+          VALUES('${user_id}', ${sender_id}, '${title_sane}', '${message_sane}')`;
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error('SENDUSERMESSAGE_FAIL');
+      }
+      resolve('OK');
+    } catch (error) {
+      console.log(error);
+      reject('DATABASE_FAIL');
+    }
+  });
+};
+
+
+// *****************************************************************************
+// Gets the funds of a given user/game
+// *****************************************************************************
+const getUserFunds = (user_id, game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT funds FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
+
+    try {
+      const results = await db.query(sql);
+      if (results.length !== 1) {
+        throw new Error("GETUSERFUNDS_NOT_FOUND");
+      }
+      resolve(results[0].funds);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+// *****************************************************************************
+// Get the buy history for user/game
+// *****************************************************************************
+const getBuyHistory = (user_id, game_id) => {
+  return new Promise(async (resolve, reject) => {
+    /*
+    let sql = ``;
+    sql += `SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst' `;
+    sql += `FROM stock_event, stock AS s `;
+    sql += `WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}' `;
+    sql += `ORDER BY tst DESC`;
+    */
+
+    let sql = ` 
+        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
+        FROM stock_event, stock AS s
+        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
+        ORDER BY tst DESC`;
+
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// *****************************************************************************
+// Get the sell history for user/game
+// *****************************************************************************
+const getSellHistory = (user_id, game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
+        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
+        FROM stock_event, stock AS s
+        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
+        ORDER BY tst DESC`;
+
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// *****************************************************************************
+// Get the amount of given stock for user/game
+// *****************************************************************************
+const getUserStock = (user_id, game_id, stock_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `;
+      SELECT buy_sum-sell_sum AS 'assets'
+      FROM(
+      SELECT user_id, stock_id, SUM(buy) AS buy_sum, SUM(sell) AS sell_sum
+      FROM(
+      SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell'
+      FROM stock_event
+      WHERE transaction_type='B' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}'
+      UNION ALL
+      SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell'
+      FROM stock_event
+      WHERE transaction_type='S' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}'
+      ) AS summed
+      GROUP BY user_id, stock_id
+      ) AS final, stock
+      WHERE final.stock_id=stock.id `;
+
+    try {
+      const results = await db.query(sql);
+      if (results.length !== 1) {
+        throw new Error("GETUSERSTOCK_NOT_FOUND");
+      }
+      resolve(results[0].assets);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+// *****************************************************************************
+// Try to login with email/password
+// *****************************************************************************
+const loginWithEmail = (email, password) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const valid_email = validator.isEmail(email);
+      if (!valid_email) {
+        throw new Error("EMLOGIN_INVALID_EMAIL");
+      }
+
+      const email_exists = await doesEmailExist(email);
+      if (!email_exists) {
+        throw new Error("EMLOGIN_EMAIL_NOT_FOUND");
+      }
+
+      let sql = `SELECT id, pass FROM user_account WHERE email='${email}'`;
+
+      const results = await db.query(sql);
+      if (results.length !== 1) {
+        throw new Error("EMLOGIN_FAIL");
+      }
+
+      const hashed_pw = hashPassword(password);
+      if (results[0].pass !== hashed_pw) {
+        throw new Error("EMLOGIN_WRONG_PASS");
+      }
+
+      // get user id for the new account
+      const user_id = results[0].id;
+      if (user_id === null) {
+        throw new Error("EMLOGIN_USER_ID")
+      }
+
+      const login_ok = await commonLogin(user_id);
+      resolve(login_ok);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// *****************************************************************************
+// Try to register with email
+// *****************************************************************************
+const registerWithEmail = (email, password, username) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // validate username
+      const valid_username = username_regex.exec(username) !== null;
+      if (!valid_username) {
+        throw new Error("EMREGISTER_INVALID_USERNAME");
+      }
+
+      const exists = await doesUsernameExist(username);
+      console.log(exists);
+      if (exists) {
+        throw new Error("EMREGISTER_USERNAME_EXISTS");
+      }
+
+      const valid_email = validator.isEmail(email);
+      if (!valid_email) {
+        throw new Error("EMREGISTER_INVALID_EMAIL");
+      }
+
+      const email_exists = await doesEmailExist(email);
+      if (email_exists) {
+        throw new Error("EMREGISTER_EMAIL_EXISTS");
+      }
+
+      if (password.length < 8) {
+        throw new Error("EMREGISTER_PASSWORD_LENGTH");
+      }
+
+      const hashed_pw = hashPassword(password);
+
+      // TODO: encrypt email?
+      let sql = `
+          INSERT INTO user_account(username, pass, email, access_token, signup_date)
+          VALUES('${username}', '${hashed_pw}', '${email}', NULL, CURRENT_TIMESTAMP)`;
+
+      const results = await db.query(sql);
+
+      if (results.affectedRows !== 1) {
+        throw new Error("EMREGISTER_REG_FAIL");
+      }
+
+      // get user id for the new account
+      /*
+      const user_id = await getUserIDWithEmail(email);
+      if (user_id === null) {
+        throw new Error("EMREGISTER_FAIL");
+      }
+
+      const login_ok = await commonLogin(user_id);
+      */
+
+      // can't login until account is activated
+
+      await sendActivationMail(email, username);
+
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const editUserName = (user_id, new_username) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // validate username
+      const valid_username = username_regex.exec(new_username) !== null;
+      if (!valid_username) {
+        throw new Error("EDITUSERNAME_INVALID_USERNAME");
+      }
+
+      const exists = await doesUsernameExist(new_username);
+      console.log(exists);
+      if (exists) {
+        throw new Error("EDITUSERNAME_USERNAME_EXISTS");
+      }
+
+      let sql = `UPDATE user_account SET username='${new_username}' WHERE id='${user_id}'`;
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("EDITUSERNAME_FAIL");
+      }
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+// Get a list of avatar options available to user
+const getAvatarOptions = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    // TODO
+  });
+};
+
+
+    // Make new avatar for user. Upload it to S3.
+const setUserAvatar = (user_id, avatar) => {
+  return new Promise(async (resolve, reject) => {
+    // TODO
+  });
+};
+
 
 module.exports = {
   // ***************************************************************************
@@ -379,575 +944,31 @@ module.exports = {
   updateAccessToken: updateAccessToken,
 
   activateUser: activateUser,
-
-  suspendUser: (user_id, duration) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        UPDATE user_account SET suspend_end=CURRENT_TIMESTAMP+'${duration}'
-        WHERE id='${user_id}'`;
-
-      try {
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("SUSPENDUSER_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  banUser: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `UPDATE user_account SET suspend_end=DATE('9999-12-31') WHERE id='${user_id}'`;
-
-      try {
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("BANUSER_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  unbanUser: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `UPDATE user_account SET suspend_end=NULL WHERE id='${user_id}'`;
-
-      try {
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("UNBANUSER_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
+  suspendUser: suspendUser,
+  banUser: banUser,
+  unbanUser: unbanUser,
   isUserSuspended: isUserSuspended,
-
   isUserActivated: isUserActivated,
-
-  addPremium: (user_id, num_days) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // check if user already has premium active
-        const has_premium = await user.hasPremium(user_id);
-
-        const hours = num_days * 24;
-
-        let sql;
-        if (has_premium) {
-          // add more time to existing premium
-          sql = `
-            UPDATE user_account
-            SET premium_end=ADD_TIME(premium_end, '${hours}:00:00')
-            WHERE id='${user_id}'`;
-        } else {
-          // start new premium
-          sql = `
-            UPDATE user_account
-            SET premium_end=ADD_TIME(CURRENT_TIMESTAMP, '${hours}:00:00'
-            WHERE id='${user_id}'`;
-        }
-
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("ADDPREMIUM_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  hasPremium: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        SELECT IF(CURRENT_TIMESTAMP < premium_end, true, false) AS 'premium'
-        FROM user_account WHERE id='${user_id}'`;
-
-      try {
-        const result = await db.query(sql);
-        if (result.length !== 1) {
-          throw new Error("HASPREMIUM_NOT_FOUND");
-        }
-        resolve(result[0].premium);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-
-  getAllUsers: () => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `SELECT id, username, account_link, email, signup_date FROM user_account`;
-
-      try {
-        const result = await db.query(sql);
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-
-  getUserGames: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        SELECT g.id, g.game_type, g.name, g.description, g.start_time, g.end_time
-        FROM game AS g, user_game AS ug
-        WHERE g.id=ug.game_id AND ug.user_id='${user_id}'`;
-
-      try {
-        const result = await db.query(sql);
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-
-
-  // ***************************************************************************
-  // Gets info for a user with User ID and Access Token
-  // ***************************************************************************
-  getInfo: (user_id, access_token) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `SELECT username, access_token, signup_date, image `;
-      sql +=    `FROM user_account WHERE id='${user_id}'`;
-
-      try {
-        const results = await db.query(sql);
-        if (results.length !== 1) {
-          throw new Error("GETINFO_NOT_FOUND");
-        }
-        if (results[0].access_token !== access_token) {
-          throw new Error("GETINFO_ACCESS_TOKEN");
-        }
-
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-
-    });
-  },
-
-  // ***************************************************************************
-  // Get publicly available info for a user. Does not require token.
-  getUserPublicInfo: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const followers = await countUserFollowers(user_id);
-
-        let sql = `SELECT username, signup_date, image FROM user_account WHERE id='${user_id}'`;
-        const results = await db.query(sql);
-
-        if (results.length !== 1) {
-          throw new Error('GETUSERPUBLICINFO_NOT_FOUND');
-        }
-
-        results[0].followers = followers;
-
-        resolve(results[0]);
-      } catch (error) {
-        console.log(error);
-        reject('FAIL');
-      }
-    });
-  },
-
-  // ***************************************************************************
-  // Follow a user
-  // ***************************************************************************
-  followUser: (user_id, followed_user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `INSERT INTO user_follow(user_id, followed_id) VALUES('${user_id}', '${followed_user_id}')`;
-
-      try {
-        if (user_id === followed_user_id) {
-          throw new Error('FOLLOW_USER_SELF');
-        }
-
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error('FOLLOW_USER_RESULT');
-        }
-        resolve('OK');
-      } catch (error) {
-        console.log(error);
-        reject('DATABASE_FAIL');
-      }
-    });
-  },
-
-  // ***************************************************************************
-  // Unfollow a user
-  // ***************************************************************************
-  unfollowUser: (user_id, followed_user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `DELETE FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
-
-      try {
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error('UNFOLLOW_USER_RESULT');
-        }
-        resolve('OK');
-      } catch (error) {
-        console.log(error);
-        reject('DATABASE_FAIL');
-      }
-    });
-  },
-
-  // ***************************************************************************
-  // Get a list of followers for a user
-  // ***************************************************************************
-  getFollowerList: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        SELECT u.id, u.username, u.image, f.follow_date
-        FROM user_account AS u, user_follow AS f
-        WHERE f.followed_id='${user_id}' AND f.user_id=u.id`;
-
-      // TODO: sort by follow date
-
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        console.log(error);
-        reject('DATABASE_FAIL');
-      }
-    });
-  },
-
-  // ***************************************************************************
-  // Get a list of followed users for a user
-  // ***************************************************************************
-  getFollowingList: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        SELECT u.id, u.username, u.image, f.follow_date
-        FROM user_account AS u, user_follow AS f
-        WHERE f.user_id='${user_id}' AND f.followed_id=u.id`;
-
-      // TODO: sort by follow date
-
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        console.log(error);
-        reject('DATABASE_FAIL');
-      }
-    });
-  },
-
-
-  sendUserMessage: (user_id, sender_id, message) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // validate message contents
-        let message_sane = validator.escape(message.message);
-        message_sane = validator.stripLow(message_sane, true);
-
-        // validate message title
-        let title_sane = validator.escape(message.title);
-        title_sane = validator.stripLow(title_sane, true);
-
-        if (sender_id === null) {
-          sender_id = 'NULL';
-        } else {
-          sender_id = `'${sender_id}'`;
-        }
-
-
-        let sql = `
-          INSERT INTO user_message(user_id, sender_id, title, message)
-          VALUES('${user_id}', ${sender_id}, '${title_sane}', '${message_sane}')`;
-
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error('SENDUSERMESSAGE_FAIL');
-        }
-        resolve('OK');
-      } catch (error) {
-        console.log(error);
-        reject('DATABASE_FAIL');
-      }
-    });
-  },
-
-
-  // ***************************************************************************
-  // Gets the funds of a given user/game
-  // ***************************************************************************
-  getUserFunds: (user_id, game_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `SELECT funds FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
-
-      try {
-        const results = await db.query(sql);
-        if (results.length !== 1) {
-          throw new Error("GETUSERFUNDS_NOT_FOUND");
-        }
-        resolve(results[0].funds);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  // ***************************************************************************
-  // Get the buy history for user/game
-  // ***************************************************************************
-  getBuyHistory: (user_id, game_id) => {
-    return new Promise(async (resolve, reject) => {
-      /*
-      let sql = ``;
-      sql += `SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst' `;
-      sql += `FROM stock_event, stock AS s `;
-      sql += `WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}' `;
-      sql += `ORDER BY tst DESC`;
-      */
-
-      let sql = ` 
-        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
-        FROM stock_event, stock AS s
-        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
-        ORDER BY tst DESC`;
-
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  // ***************************************************************************
-  // Get the sell history for user/game
-  // ***************************************************************************
-  getSellHistory: (user_id, game_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
-        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
-        FROM stock_event, stock AS s
-        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
-        ORDER BY tst DESC`;
-
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-
-  // ***************************************************************************
-  // Get the amount of given stock for user/game
-  // ***************************************************************************
-  getUserStock: (user_id, game_id, stock_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = ``;
-      sql += `SELECT buy_sum-sell_sum AS 'assets' `;
-      sql += `FROM( `;
-      sql += `SELECT user_id, stock_id, SUM(buy) AS buy_sum, SUM(sell) AS sell_sum `;
-      sql += `FROM( `;
-      sql += `SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell' `;
-      sql += `FROM stock_event `;
-      sql += `WHERE transaction_type='B' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}' `;
-      sql += `UNION ALL `;
-      sql += `SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell' `;
-      sql += `FROM stock_event `;
-      sql += `WHERE transaction_type='S' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}' `;
-      sql += `) AS summed `;
-      sql += `GROUP BY user_id, stock_id `;
-      sql += `) AS final, stock `;
-      sql += `WHERE final.stock_id=stock.id `;
-
-      try {
-        const results = await db.query(sql);
-        if (results.length !== 1) {
-          throw new Error("GETUSERSTOCK_NOT_FOUND");
-        }
-        resolve(results[0].assets);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
+  addPremium: addPremium,
+  hasPremium: hasPremium,
+  getAllUsers: getAllUsers,
+  getUserGames: getUserGames,
+  getInfo: getInfo,
+  getUserPublicInfo: getUserPublicInfo,
+  followUser: followUser,
+  unfollowUser: unfollowUser,
+  getFollowerList: getFollowerList,
+  getFollowingList: getFollowingList,
+  sendUserMessage: sendUserMessage,
+  getUserFunds: getUserFunds,
+  getBuyHistory: getBuyHistory,
+  getSellHistory: getSellHistory,
+  getUserStock: getUserStock,
   commonLogin: commonLogin,
-
-  // ***************************************************************************
-  // Try to login with email/password
-  // ***************************************************************************
-  loginWithEmail: (email, password) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const valid_email = validator.isEmail(email);
-        if (!valid_email) {
-          throw new Error("EMLOGIN_INVALID_EMAIL");
-        }
-
-        const email_exists = await doesEmailExist(email);
-        if (!email_exists) {
-          throw new Error("EMLOGIN_EMAIL_NOT_FOUND");
-        }
-
-        let sql = `SELECT id, pass FROM user_account WHERE email='${email}'`;
-
-        const results = await db.query(sql);
-        if (results.length !== 1) {
-          throw new Error("EMLOGIN_FAIL");
-        }
-
-        const hashed_pw = hashPassword(password);
-        if (results[0].pass !== hashed_pw) {
-          throw new Error("EMLOGIN_WRONG_PASS");
-        }
-
-        // get user id for the new account
-        const user_id = results[0].id;
-        if (user_id === null) {
-          throw new Error("EMLOGIN_USER_ID")
-        }
-
-        const login_ok = await commonLogin(user_id);
-        resolve(login_ok);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  // ***************************************************************************
-  // Try to register with email
-  // ***************************************************************************
-  registerWithEmail: (email, password, username) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // validate username
-        const valid_username = username_regex.exec(username) !== null;
-        if (!valid_username) {
-          throw new Error("EMREGISTER_INVALID_USERNAME");
-        }
-
-        const exists = await doesUsernameExist(username);
-        console.log(exists);
-        if (exists) {
-          throw new Error("EMREGISTER_USERNAME_EXISTS");
-        }
-
-        const valid_email = validator.isEmail(email);
-        if (!valid_email) {
-          throw new Error("EMREGISTER_INVALID_EMAIL");
-        }
-
-        const email_exists = await doesEmailExist(email);
-        if (email_exists) {
-          throw new Error("EMREGISTER_EMAIL_EXISTS");
-        }
-
-        if (password.length < 8) {
-          throw new Error("EMREGISTER_PASSWORD_LENGTH");
-        }
-
-        const hashed_pw = hashPassword(password);
-
-        // TODO: encrypt email?
-        let sql = `
-          INSERT INTO user_account(username, pass, email, access_token, signup_date)
-          VALUES('${username}', '${hashed_pw}', '${email}', NULL, CURRENT_TIMESTAMP)`;
-
-        const results = await db.query(sql);
-
-        if (results.affectedRows !== 1) {
-          throw new Error("EMREGISTER_REG_FAIL");
-        }
-
-        // get user id for the new account
-        /*
-        const user_id = await getUserIDWithEmail(email);
-        if (user_id === null) {
-          throw new Error("EMREGISTER_FAIL");
-        }
-
-        const login_ok = await commonLogin(user_id);
-        */
-
-        // can't login until account is activated
-
-        await sendActivationMail(email, username);
-
-        resolve('OK');
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  editUserName: (user_id, new_username) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // validate username
-        const valid_username = username_regex.exec(new_username) !== null;
-        if (!valid_username) {
-          throw new Error("EDITUSERNAME_INVALID_USERNAME");
-        }
-
-        const exists = await doesUsernameExist(new_username);
-        console.log(exists);
-        if (exists) {
-          throw new Error("EDITUSERNAME_USERNAME_EXISTS");
-        }
-
-        let sql = `UPDATE user_account SET username='${new_username}' WHERE id='${user_id}'`;
-
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("EDITUSERNAME_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-
-  // Get a list of avatar options available to user
-  getAvatarOptions: (user_id) => {
-    return new Promise(async (resolve, reject) => {
-      // TODO
-    });
-  },
-
-
-  // Make new avatar for user. Upload it to S3.
-  setUserAvatar: (user_id, avatar) => {
-    return new Promise(async (resolve, reject) => {
-      // TODO
-    });
-  },
-
-
+  loginWithEmail: loginWithEmail,
+  registerWithEmail: registerWithEmail,
+  editUserName: editUserName,
+  getAvatarOptions: getAvatarOptions,
+  setUserAvatar: setUserAvatar,
 };
 
