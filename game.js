@@ -133,34 +133,34 @@ const hashGamePassword = (password) => {
 
 
 
-module.exports = {
-  // ***************************************************************************
-  // Gets the public information about a given game
-  // ***************************************************************************
-  getPublicGameInfo: (game_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
+// ***************************************************************************
+// Gets the public information about a given game
+// ***************************************************************************
+const getPublicGameInfo = (game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
         SELECT name, description, start_time, end_time
         FROM game WHERE id='${game_id}'`;
 
-      try {
-        const results = await db.query(sql);
-        if (results.length !== 1) {
-          throw new Error("GETGAMEINFO_NOT_FOUND");
-        }
-        resolve(results);
-      } catch (error) {
-        reject(error);
+    try {
+      const results = await db.query(sql);
+      if (results.length !== 1) {
+        throw new Error("GETGAMEINFO_NOT_FOUND");
       }
-    });
-  },
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-  // ***************************************************************************
-  // Gets the list of stock for the given market
-  // ***************************************************************************
-  getStockList: (game_id) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
+
+// ***************************************************************************
+// Gets the list of stock for the given market
+// ***************************************************************************
+const getStockList = (game_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
         SELECT
         s.symbol AS 'symbol',
         s.full_name AS 'full_name',
@@ -169,23 +169,22 @@ module.exports = {
         s.update_date AS 'update_date'
         FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'`;
 
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
+const getStockRisers = (game_id, amount) => {
+  return new Promise(async (resolve, reject) => {
+    if (amount === null) {
+      amount = 5;
+    }
 
-  getStockRisers: (game_id, amount) => {
-    return new Promise(async (resolve, reject) => {
-      if (amount === null) {
-        amount = 5;
-      }
-
-      let sql = `
+    let sql = `
         SELECT
         s.symbol AS 'symbol',
         s.full_name AS 'full_name',
@@ -195,22 +194,22 @@ module.exports = {
         FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'
         ORDER BY s.variety LIMIT '${amount}'`;
 
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-  getStockFallers: (game_id, amount) => {
-    return new Promise(async (resolve, reject) => {
-      if (amount === null) {
-        amount = 5;
-      }
+const getStockFallers = (game_id, amount) => {
+  return new Promise(async (resolve, reject) => {
+    if (amount === null) {
+      amount = 5;
+    }
 
-      let sql = `
+    let sql = `
         SELECT
         s.symbol AS 'symbol',
         s.full_name AS 'full_name',
@@ -220,21 +219,21 @@ module.exports = {
         FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'
         ORDER BY s.variety DESC LIMIT '${amount}'`;
 
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-  // ***************************************************************************
-  // Get the leaderboard for the given game
-  // ***************************************************************************
-  getLeaderboard: (game_id, start, amount) => {
-    return new Promise(async (resolve, reject) => {
-      let sql = `
+// ***************************************************************************
+// Get the leaderboard for the given game
+// ***************************************************************************
+const getLeaderboard =(game_id, start, amount) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `
         SELECT u.username, u.image, SUM(assets) AS 'net_worth'
         FROM(
         SELECT user_id, stock.full_name, (buy_sum-sell_sum)*stock.price AS 'assets'
@@ -257,324 +256,355 @@ module.exports = {
         GROUP BY user_id 
         LIMIT '${start}', '${amount}'`;
 
-      try {
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        reject(error);
+    try {
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+// ***************************************************************************
+// Attempts to add the given user to the given game
+// ***************************************************************************
+const joinGame = (game_id, user_id, password) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const game_info = await getGameInfo(game_id);
+
+      if (game_info.closed) {
+        throw new Error("JOINGAME_CLOSED");
       }
-    });
-  },
 
-  // ***************************************************************************
-  // Attempts to add the given user to the given game
-  // ***************************************************************************
-  joinGame: (game_id, user_id, password) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const game_info = await getGameInfo(game_id);
-
-        if (game_info.closed) {
-          throw new Error("JOINGAME_CLOSED");
-        }
-
-        switch (game_info.game_type) {
-          case 'private': {
-            // check password for private games
-            const hashed_pw = hashGamePassword(password);
-            if (game_info.pass !== hashed_pw) {
-              throw new Error("JOINGAME_WRONG_PASS");
-            }
-            break;
+      switch (game_info.game_type) {
+        case 'private': {
+          // check password for private games
+          const hashed_pw = hashGamePassword(password);
+          if (game_info.pass !== hashed_pw) {
+            throw new Error("JOINGAME_WRONG_PASS");
           }
-          case 'season': {
-            // check active time for seasonal games
-            const game_active = await isGameActive(game_id);
-            if (!game_active) {
-              throw new Error("JOINGAME_NOT_ACTIVE");
-            }
-            break;
-          }
+          break;
         }
+        case 'season': {
+          // check active time for seasonal games
+          const game_active = await isGameActive(game_id);
+          if (!game_active) {
+            throw new Error("JOINGAME_NOT_ACTIVE");
+          }
+          break;
+        }
+      }
 
-        let sql = `
+      let sql = `
           INSERT INTO user_game(user_id, game_id, funds) 
           VALUES('${user_id}', '${game_id}', '${game_info.base_funds}')`;
 
-        const results = await db.query(sql);
-        resolve('OK');
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+      const results = await db.query(sql);
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
 
-  // Create open game: no owner, no duration, no password
-  createOpenGame: (name, description, base_funds, market_id) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let sql = `
+// Create open game: no owner, no duration, no password
+const createOpenGame = (name, description, base_funds, market_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `
           INSERT INTO
           game(owner_id, market_id, pass, game_type, name, description, base_funds, start_time, end_time)
           VALUES(NULL, '${market_id}', NULL, 'open', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("CREATEOPENGAME_FAIL");
-        }
-
-        // return new game id
-        const new_game_id = await getGameID(name);
-        resolve(new_game_id);
-      } catch (error) {
-        reject(error);
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("CREATEOPENGAME_FAIL");
       }
-    });
-  },
 
-  // Create seasonal game: no owner, no password, fixed duration
-  createSeasonalGame: (name, description, base_funds, market_id, start_time, end_time) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let sql = `
+      // return new game id
+      const new_game_id = await getGameID(name);
+      resolve(new_game_id);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+// Create seasonal game: no owner, no password, fixed duration
+const createSeasonalGame = (name, description, base_funds, market_id, start_time, end_time) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `
           INSERT INTO
           game(owner_id, market_id, pass, game_type, name, description, base_funds, start_time, end_time)
           VALUES(NULL, '${market_id}', NULL, 'season', '${name}', '${description}', '${base_funds}', ${start_time}', '${end_time}')`;
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1){
-          throw new Error("CREATESEASONALGAME_FAIL");
-        }
-
-        // return new game id
-        const new_game_id = await getGameID(name);
-        resolve(new_game_id);
-      } catch (error) {
-        reject(error);
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1){
+        throw new Error("CREATESEASONALGAME_FAIL");
       }
-    });
-  },
 
-  // Create private game: owner, password, no duration
-  createPrivateGame: (owner_id, password, name, description, base_funds, market_id) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const hashed_pw = hashGamePassword(password);
+      // return new game id
+      const new_game_id = await getGameID(name);
+      resolve(new_game_id);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-        let sql = `
+
+// Create private game: owner, password, no duration
+const createPrivateGame = (owner_id, password, name, description, base_funds, market_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const hashed_pw = hashGamePassword(password);
+
+      let sql = `
           INSERT INTO
           game(owner_id, market_id, pass, game_type, name, description, start_time, end_time)
           VALUES('${owner_id}', '${market_id}', ${hashed_pw}', 'private', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("CREATEPRIVATEGAME_FAIL");
-        }
-
-        // return new game id
-        const new_game_id = await getGameID(name);
-        resolve(new_game_id);
-      } catch (error) {
-        reject(error);
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("CREATEPRIVATEGAME_FAIL");
       }
-    })
-  },
 
-  setGameClosed: (game_id, closed) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let cn = closed ? 1 : 0;
-        let sql = `UPDATE game SET closed='${cn}' WHERE id='${game_id}'`;
+      // return new game id
+      const new_game_id = await getGameID(name);
+      resolve(new_game_id);
+    } catch (error) {
+      reject(error);
+    }
+  })
+};
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("CLOSEGAME_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
+
+const setGameClosed = (game_id, closed) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let cn = closed ? 1 : 0;
+      let sql = `UPDATE game SET closed='${cn}' WHERE id='${game_id}'`;
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("CLOSEGAME_FAIL");
       }
-    });
-  },
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-  editGameDescription: (game_id, new_description) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let sql = `UPDATE game SET description='${new_description}' WHERE id='${game_id}'`;
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("EDITGAMEDESCRIPTION_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
+const editGameDescription = (game_id, new_description) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `UPDATE game SET description='${new_description}' WHERE id='${game_id}'`;
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("EDITGAMEDESCRIPTION_FAIL");
       }
-    });
-  },
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-  editGameName: (game_id, new_name) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let sql = `UPDATE game SET name='${new_name}' WHERE id='${game_id}'`;
+const editGameName = (game_id, new_name) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `UPDATE game SET name='${new_name}' WHERE id='${game_id}'`;
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("EDITGAMENAME_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("EDITGAMENAME_FAIL");
       }
-    });
-  },
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-  editGameStartTime: (game_id, start_time) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let sql = `UPDATE game SET start_time='${start_time}' WHERE id='${game_id}'`;
+const editGameStartTime = (game_id, start_time) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `UPDATE game SET start_time='${start_time}' WHERE id='${game_id}'`;
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("EDITGAMESTARTTIME_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("EDITGAMESTARTTIME_FAIL");
       }
-    });
-  },
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
-  editGameEndTime: (game_id, end_time) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let sql = `UPDATE game SET end_time='${end_time}' WHERE id='${game_id}'`;
+const editGameEndTime = (game_id, end_time) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `UPDATE game SET end_time='${end_time}' WHERE id='${game_id}'`;
 
-        const result = await db.query(sql);
-        if (result.affectedRows !== 1) {
-          throw new Error("EDITGAMEENDTIME_FAIL");
-        }
-        resolve('OK');
-      } catch (error) {
-        reject(error);
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("EDITGAMEENDTIME_FAIL");
       }
-    });
-  },
+      resolve('OK');
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
 
+// ***************************************************************************
+// Attempts to buy stock with given user
+// ***************************************************************************
+const buyStock = (game_id, user_id, stock_id, amount) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const stock_price = await getStockPrice(stock_id);
+      const user_funds = await user.getUserFunds(user_id, game_id);
 
-  // ***************************************************************************
-  // Attempts to buy stock with given user
-  // ***************************************************************************
-  buyStock: (game_id, user_id, stock_id, amount) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const stock_price = await getStockPrice(stock_id);
-        const user_funds = await user.getUserFunds(user_id, game_id);
+      const needed_funds = Number(amount) * Number(stock_price);
+      if (needed_funds > user_funds) {
+        throw new Error("BUYSTOCK_NOT_ENOUGH");
+      }
 
-        const needed_funds = Number(amount) * Number(stock_price);
-        if (needed_funds > user_funds) {
-          throw new Error("BUYSTOCK_NOT_ENOUGH");
+      const game_info = await getGameInfo(game_id);
+
+      // TODO: only allow buying when stock market is open?
+      // TODO: only allow buying when game is active (start_time, end_time)
+
+      const game_closed = await isGameClosed(game_id);
+      if (game_closed) {
+        throw new Error("BUYSTOCK_GAME_CLOSED");
+      }
+
+      const joined_game = await hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw new Error("BUYSTOCK_NOT_JOINED");
+      }
+
+      if (game_info.game_type === 'season') {
+        const game_active = await isGameActive(game_id);
+        if (!game_active) {
+          throw new Error("BUYSTOCK_GAME_INACTIVE");
         }
+      }
 
-        const game_info = await getGameInfo(game_id);
-
-        // TODO: only allow buying when stock market is open?
-        // TODO: only allow buying when game is active (start_time, end_time)
-
-        const game_closed = await isGameClosed(game_id);
-        if (game_closed) {
-          throw new Error("BUYSTOCK_GAME_CLOSED");
-        }
-
-        const joined_game = await hasPlayerJoinedGame(token_info.user_id, game_id);
-        if (!joined_game) {
-          throw new Error("BUYSTOCK_NOT_JOINED");
-        }
-
-        if (game_info.game_type === 'season') {
-          const game_active = await isGameActive(game_id);
-          if (!game_active) {
-            throw new Error("BUYSTOCK_GAME_INACTIVE");
-          }
-        }
-
-        // start buy transaction
-        let stock_sql = `
+      // start buy transaction
+      let stock_sql = `
           INSERT INTO stock_event(user_id, stock_id, game_id, amount, transaction_type, unit_price)
           VALUES('${user_id}', '${stock_id}', '${game_id}', '${amount}', 'B', '${stock_price}')`;
 
-        let funds_sql = `UPDATE user_game SET funds=funds-'${needed_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
+      let funds_sql = `UPDATE user_game SET funds=funds-'${needed_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
-        const results = await db.transaction(stock_sql, funds_sql, 1, 1);
+      const results = await db.transaction(stock_sql, funds_sql, 1, 1);
 
-        resolve(results);
-      } catch (error) {
-        reject(error);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+// ***************************************************************************
+// Attempts to sell stock with given user
+// ***************************************************************************
+const sellStock = (game_id, user_id, stock_id, amount) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const stock_price = await getStockPrice(stock_id);
+      const user_stock = await user.getUserStock(user_id, game_id, stock_id);
+
+      if (user_stock < amount) {
+        throw new Error("SELLSTOCK_NOT_ENOUGH");
       }
-    });
-  },
 
-  // ***************************************************************************
-  // Attempts to sell stock with given user
-  // ***************************************************************************
-  sellStock: (game_id, user_id, stock_id, amount) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const stock_price = await getStockPrice(stock_id);
-        const user_stock = await user.getUserStock(user_id, game_id, stock_id);
+      const game_info = await getGameInfo(game_id);
 
-        if (user_stock < amount) {
-          throw new Error("SELLSTOCK_NOT_ENOUGH");
+      // TODO: only allow selling when stock market is open?
+      // TODO: only allow selling when game is active (start_time, end_time)
+
+      const game_closed = await isGameClosed(game_id);
+      if (game_closed) {
+        throw new Error("SELLSTOCK_GAME_CLOSED");
+      }
+
+      const joined_game = await hasPlayerJoinedGame(user_id, game_id);
+      if (!joined_game) {
+        throw new Error("SELLSTOCK_NOT_JOINED");
+      }
+
+      if (game_info.game_type === 'season') {
+        const game_active = await isGameActive(game_id);
+        if (!game_active) {
+          throw new Error("SELLSTOCK_GAME_INACTIVE");
         }
+      }
 
-        const game_info = await getGameInfo(game_id);
+      const rewarded_funds = Number(amount) * Number(stock_price);
 
-        // TODO: only allow selling when stock market is open?
-        // TODO: only allow selling when game is active (start_time, end_time)
-
-        const joined_game = await hasPlayerJoinedGame(user_id, game_id);
-        if (!joined_game) {
-          throw new Error("SELLSTOCK_NOT_JOINED");
-        }
-
-        if (game_info.game_type === 'season') {
-          const game_active = await isGameActive(game_id);
-          if (!game_active) {
-            throw new Error("SELLSTOCK_GAME_INACTIVE");
-          }
-        }
-
-        const rewarded_funds = Number(amount) * Number(stock_price);
-
-        // start sell transaction
-        let stock_sql = `
+      // start sell transaction
+      let stock_sql = `
           INSERT INTO stock_event(user_id, stock_id, game_id, amount, transaction_type, unit_price)
           VALUES('${user_id}', '${stock_id}', '${game_id}', '${amount}', 'S', '${stock_price}')`;
 
-        let funds_sql = `UPDATE user_game SET funds=funds+'${rewarded_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
+      let funds_sql = `UPDATE user_game SET funds=funds+'${rewarded_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
-        const results = await db.transaction(stock_sql, funds_sql, 1, 1);
+      const results = await db.transaction(stock_sql, funds_sql, 1, 1);
 
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
 
-  getAllGames: () => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        let sql = `SELECT * FROM game`;
+const getAllGames = () => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `SELECT * FROM game`;
 
-        const results = await db.query(sql);
-        resolve(results);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+
+module.exports = {
+  getPublicGameInfo: getPublicGameInfo,
+  getStockList: getStockList,
+  getStockRisers: getStockRisers,
+  getStockFallers: getStockFallers,
+  getLeaderboard: getLeaderboard,
+  joinGame: joinGame,
+  createOpenGame: createOpenGame,
+  createSeasonalGame: createSeasonalGame,
+  createPrivateGame: createPrivateGame,
+  setGameClosed: setGameClosed,
+  editGameDescription: editGameDescription,
+  editGameName: editGameName,
+  editGameStartTime: editGameStartTime,
+  editGameEndTime: editGameEndTime,
+  buyStock: buyStock,
+  sellStock: sellStock,
+  getAllGames: getAllGames,
 };

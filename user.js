@@ -195,11 +195,6 @@ const generateActivationToken = (email) => {
 
   const buffer = Buffer.concat([header_buffer, email_buffer]);
 
-  console.log(header_buffer);
-  console.log(random_buffer);
-  console.log(buffer);
-
-
   // encrypt it
   const iv = crypto.randomBytes(16);
   const key = settings.activation_token_key;
