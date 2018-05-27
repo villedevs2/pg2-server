@@ -132,69 +132,75 @@ const isValidFBToken = (token, user_id) => {
 };
 
 
+const login = (fb_account, auth_token) => {
+  return new Promise(async (resolve, reject) => {
+
+    try {
+      const token_valid = await isValidFBToken(auth_token, fb_account);
+      if (!token_valid) {
+        throw new Error("FBLOGIN_INVALID_TOKEN");
+      }
+
+      const account_exists = await isFBAccountRegistered(fb_account);
+      if (!account_exists) {
+        throw new Error("FBLOGIN_ACCOUNT_NOT_FOUND");
+      }
+
+      const user_id = await getUserID(fb_account);
+      if (user_id === null) {
+        throw new Error("FBLOGIN_USER_ID_NOT_FOUND");
+      }
+
+      const login_ok = await user.commonLogin(user_id);
+      resolve(login_ok);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+const register = (fb_account, auth_token, user_name) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // first check for valid FB token
+      const token_valid = await isValidFBToken(auth_token, fb_account);
+      if (!token_valid) {
+        throw new Error("FBREGISTER_INVALID_TOKEN");
+      }
+      // check if the account already exists
+      const account_exists = await isFBAccountRegistered(fb_account);
+      if (account_exists) {
+        throw new Error("FBREGISTER_ACCOUNT_EXISTS");
+      }
+      // check if the username already exists
+      const username_exists = await isUsernameRegistered(user_name);
+      if (username_exists) {
+        throw new Error("FBREGISTER_USERNAME_EXISTS");
+      }
+      // try register
+      const reg_ok = await registerWithFB(fb_account, user_name);
+      if (!reg_ok) {
+        throw new Error("FBREGISTER_REG_FAIL");
+      }
+      // get user id for the new account
+      const user_id = await getUserID(fb_account);
+      if (user_id === null) {
+        throw new Error("FBREGISTER_USER_ID_NOT_FOUND");
+      }
+
+      const login_ok = await user.commonLogin(user_id);
+      resolve(login_ok);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+
+
 module.exports = {
-
-  login: (fb_account, auth_token) => {
-    return new Promise(async (resolve, reject) => {
-
-      try {
-        const token_valid = await isValidFBToken(auth_token, fb_account);
-        if (!token_valid) {
-          throw new Error("FBLOGIN_INVALID_TOKEN");
-        }
-
-        const account_exists = await isFBAccountRegistered(fb_account);
-        if (!account_exists) {
-          throw new Error("FBLOGIN_ACCOUNT_NOT_FOUND");
-        }
-
-        const user_id = await getUserID(fb_account);
-        if (user_id === null) {
-          throw new Error("FBLOGIN_USER_ID_NOT_FOUND");
-        }
-
-        const login_ok = await user.commonLogin(user_id);
-        resolve(login_ok);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  register: (fb_account, auth_token, user_name) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        // first check for valid FB token
-        const token_valid = await isValidFBToken(auth_token, fb_account);
-        if (!token_valid) {
-          throw new Error("FBREGISTER_INVALID_TOKEN");
-        }
-        // check if the account already exists
-        const account_exists = await isFBAccountRegistered(fb_account);
-        if (account_exists) {
-          throw new Error("FBREGISTER_ACCOUNT_EXISTS");
-        }
-        // check if the username already exists
-        const username_exists = await isUsernameRegistered(user_name);
-        if (username_exists) {
-          throw new Error("FBREGISTER_USERNAME_EXISTS");
-        }
-        // try register
-        const reg_ok = await registerWithFB(fb_account, user_name);
-        if (!reg_ok) {
-          throw new Error("FBREGISTER_REG_FAIL");
-        }
-        // get user id for the new account
-        const user_id = await getUserID(fb_account);
-        if (user_id === null) {
-          throw new Error("FBREGISTER_USER_ID_NOT_FOUND");
-        }
-
-        const login_ok = await user.commonLogin(user_id);
-        resolve(login_ok);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
+  login: login,
+  register: register,
 };
