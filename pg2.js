@@ -51,28 +51,32 @@ const mapPost = (express_app, path, callback) => {
   });
 };
 
-mapPost(app, '/login', user.loginWithEmail);        // tested
-mapPost(app, '/register', user.registerWithEmail);  // tested
-mapPost(app, '/fblogin', facebook.login);
-mapPost(app, '/fbregister', facebook.register);
-mapPost(app, '/userinfo', user.getInfo);    // TODO: rename?
-mapPost(app, '/gameprivateinfo', game.getPrivateGameInfo);
-mapPost(app, '/gamepublicinfo', game.getPublicGameInfo);    // TODO: replace with list public games?
-mapPost(app, '/stocklist', game.getStockList);
-mapPost(app, '/buystock', game.buyStock);
-mapPost(app, '/sellstock', game.sellStock);
-mapPost(app, '/joingame', game.joinGame);
-mapPost(app, '/leaderboard', game.getLeaderboard);
-mapPost(app, '/buyhistory', user.getBuyHistory);
-mapPost(app, '/sellhistory', user.getSellHistory);
-mapPost(app, '/followuser', user.followUser);
-mapPost(app, '/unfollowuser', user.unfollowUser);
+mapPost(app, '/user/login', user.loginWithEmail);        // tested
+mapPost(app, '/user/register', user.registerWithEmail);  // tested
+mapPost(app, '/user/fblogin', facebook.login);
+mapPost(app, '/user/fbregister', facebook.register);
+//mapPost(app, '/userinfo', user.getInfo);    // TODO: rename?
+mapPost(app, '/user/publicprofile', user.getUserPublicProfile);
+mapPost(app, '/user/privateprofile', user.getUserPrivateProfile);
+mapPost(app, '/user/follow', user.followUser);
+mapPost(app, '/user/unfollowu', user.unfollowUser);
+mapPost(app, '/user/messages', user.getUserMessageList);
+mapPost(app, '/user/readmessage', user.readUserMessage);
 
-// TODO: merge followers list/following list/user public info to getUserPublicProfile???
+mapPost(app, '/game/privateinfo', game.getPrivateGameInfo);
+mapPost(app, '/game/publicinfo', game.getPublicGameInfo);    // TODO: replace with list public games?
+mapPost(app, '/game/stocklist', game.getStockList);
+mapPost(app, '/game/buystock', game.buyStock);
+mapPost(app, '/game/sellstock', game.sellStock);
+mapPost(app, '/game/join', game.joinGame);
+mapPost(app, '/game/leaderboard', game.getLeaderboard);
+mapPost(app, '/game/buyhistory', user.getBuyHistory);
+mapPost(app, '/game/sellhistory', user.getSellHistory);
+mapPost(app, '/game/funds', game.getUserFunds);
+mapPost(app, '/game/stock', game.getUserStock);
 
-
-mapPost(admin_app, '/userlist', admin.getUserList);
-mapPost(admin_app, '/gamelist', admin.getGameList);
+mapPost(admin_app, '/admin/userlist', admin.getUserList);
+mapPost(admin_app, '/admin/gamelist', admin.getGameList);
 
 
 

@@ -74,10 +74,10 @@ const hashPassword = (password) => {
   return hash.digest('hex');
 };
 
-const hashAvatarImage = (image) => {
+const makeAvatarUrl = (user_id) => {
   const hash = crypto.createHash('sha256');
-  hash.update(`${image}.${settings.db_avatar_image_salt}`);
-  return hash.digest('hex');
+  hash.update(`${user_id}.${settings.db_avatar_image_salt}`);
+  return `avatar-${hash.digest('hex')}.webp`;
 }
 
 const getUserIDWithEmail = (email) => {
@@ -335,11 +335,10 @@ const activateUser = (token) => {
   });
 };
 
-
 const commonRegister = (user_id) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const url = `avatar-${hashAvatarImage(user_id)}.webp`;
+      const url = makeAvatarUrl(user_id);
 
       // make default avatar image
       // TODO
@@ -566,10 +565,20 @@ const getInfo = (user_id, access_token) => {
 // *****************************************************************************
 // Get publicly available info for a user. Does not require token.
 // *****************************************************************************
-const getUserPublicInfo = (user_id) => {
+const getUserPublicProfile = (params) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const followers = await countUserFollowers(user_id);
+      const user_id = params.user_id;
+      if (user_id === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const num_followers = await countUserFollowers(user_id);
+
+      // TODO: should followers/following be shown in public profile?
+
+      const followers_list = await getFollowerList(user_id);
+      const following_list = await getFollowingList(user_id);
 
       let sql = `SELECT username, signup_date, image FROM user_account WHERE id='${user_id}'`;
       const results = await db.query(sql);
@@ -578,15 +587,56 @@ const getUserPublicInfo = (user_id) => {
         throw new Error('GETUSERPUBLICINFO_NOT_FOUND');
       }
 
-      results[0].followers = followers;
+      results[0].num_followers = num_followers;
+
+      results[0].followers = followers_list;
+      results[0].following = following_list;
 
       resolve(results[0]);
     } catch (error) {
-      console.log(error);
-      reject('FAIL');
+      reject(error);
     }
   });
 };
+
+
+const getUserPrivateProfile = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      const num_followers = await countUserFollowers(token_info.user_id);
+      const followers_list = await getFollowerList(token_info.user_id);
+      const following_list = await getFollowingList(token_info.user_id);
+
+      let sql = `
+        SELECT username, signup_date, image
+        FROM user_account WHERE id='${token_info.user_id}'`;
+
+      const results = await db.query(sql);
+      if (results.length !== 1) {
+        throw new Error("GETINFO_NOT_FOUND");
+      }
+
+      results[0].num_followers = num_followers;
+      results[0].followers = followers_list;
+      results[0].following = following_list;
+
+      resolve(results[0]);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 
 
 // *****************************************************************************
@@ -737,14 +787,90 @@ const sendUserMessage = (user_id, sender_id, message) => {
 };
 
 
+const getUserMessageList = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      let sql = `
+        SELECT sender_id, title, message_read FROM user_message WHERE user_id='${token_info.user_id}'`;
+
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const readUserMessage = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const message_id = params.message_id;
+      const access_token = params.token;
+      if (access_token === undefined || message_id === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      let sql = `
+        SELECT sender_id, title, message_read, message
+        FROM user_message WHERE id='${message_id}' AND user_id='${token_info.user_id}'`;
+
+      const result = await db.query(sql);
+
+      // mark as read, if it's not already
+      if (result.length === 1) {
+        if (result[0].message_read === 0) {
+          let update_sql = `
+            UPDATE user_message SET message_read='1' WHERE id='${message_id}' AND user_id='${token_info.user_id}'`;
+
+          await db.query(update_sql);
+        }
+      }
+
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+
+
 // *****************************************************************************
 // Gets the funds of a given user/game
 // *****************************************************************************
-const getUserFunds = (user_id, game_id) => {
+const getUserFunds = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `SELECT funds FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
-
     try {
+      const game_id = params.game_id;
+      const access_token = params.token;
+
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      let sql = `SELECT funds FROM user_game WHERE user_id='${token_info.user_id}' AND game_id='${game_id}'`;
+
       const results = await db.query(sql);
       if (results.length !== 1) {
         throw new Error("GETUSERFUNDS_NOT_FOUND");
@@ -836,26 +962,39 @@ const getSellHistory = (params) => {
 // *****************************************************************************
 // Get the amount of given stock for user/game
 // *****************************************************************************
-const getUserStock = (user_id, game_id, stock_id) => {
+const getUserStock = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `;
-      SELECT buy_sum-sell_sum AS 'assets'
-      FROM(
-      SELECT user_id, stock_id, SUM(buy) AS buy_sum, SUM(sell) AS sell_sum
-      FROM(
-      SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell'
-      FROM stock_event
-      WHERE transaction_type='B' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}'
-      UNION ALL
-      SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell'
-      FROM stock_event
-      WHERE transaction_type='S' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}'
-      ) AS summed
-      GROUP BY user_id, stock_id
-      ) AS final, stock
-      WHERE final.stock_id=stock.id `;
-
     try {
+      const game_id = params.game_id;
+      const stock_id = params.stock_id;
+      const access_token = params.token;
+
+      if (game_id === undefined || stock_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      let sql = `;
+        SELECT buy_sum-sell_sum AS 'assets'
+        FROM(
+        SELECT user_id, stock_id, SUM(buy) AS buy_sum, SUM(sell) AS sell_sum
+        FROM(
+        SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell'
+        FROM stock_event
+        WHERE transaction_type='B' AND game_id='${game_id}' AND user_id='${token_info.user_id}' AND stock_id='${stock_id}'
+        UNION ALL
+        SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell'
+        FROM stock_event
+        WHERE transaction_type='S' AND game_id='${game_id}' AND user_id='${token_info.user_id}' AND stock_id='${stock_id}'
+        ) AS summed
+        GROUP BY user_id, stock_id
+        ) AS final, stock
+        WHERE final.stock_id=stock.id `;
+
       const results = await db.query(sql);
       if (results.length !== 1) {
         throw new Error("GETUSERSTOCK_NOT_FOUND");
@@ -1069,12 +1208,15 @@ module.exports = {
   getAllUsers: getAllUsers,
   getUserGames: getUserGames,
   getInfo: getInfo,
-  getUserPublicInfo: getUserPublicInfo,
+  getUserPublicProfile: getUserPublicProfile,
+  getUserPrivateProfile: getUserPrivateProfile,
   followUser: followUser,
   unfollowUser: unfollowUser,
   getFollowerList: getFollowerList,
   getFollowingList: getFollowingList,
   sendUserMessage: sendUserMessage,
+  getUserMessageList: getUserMessageList,
+  readUserMessage: readUserMessage,
   getUserFunds: getUserFunds,
   getBuyHistory: getBuyHistory,
   getSellHistory: getSellHistory,
