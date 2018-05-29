@@ -5,37 +5,98 @@ const fs = require('fs');
 const facebook = require('./facebook');
 const user = require('./user');
 const game = require('./game');
+const admin = require('./admin');
 
 const settings = require('./settings.json');
 
 console.log(settings.upload_path);
 
 const app = express();
-
 app.use(require('json-middleware').middleware());
+
+const admin_app = express();
+admin_app.use(require('json-middleware').middleware());
+
+const activate_app = express();
+activate_app.use(require('json-middleware').middleware());
 
 
 // static GET on /uploads: serve images
-app.use('/uploads', express.static(__dirname + settings.upload_path));
-
-// GET on root: send form
-app.get('/', (req, res) => {
-  res.writeHead(200, {'Content-Type': 'text/html'});
-  res.write('<form action="upload" method="post" enctype="multipart/form-data">');
-  res.write('<input type="file" name="filetoupload"><br>');
-  res.write('<input type="submit">');
-  res.write('</form>');
-  return res.end();
-});
+//app.use('/uploads', express.static(__dirname + settings.upload_path));
 
 
-const writeJSON = (res, json) => {
-  res.writeHead(200, {'Content-Type': 'text/json'});
-  res.write(JSON.stringify(json));
-  res.end();
+const writeJSON = (response, json) => {
+  response.writeHead(200, {'Content-Type': 'text/json'});
+  response.write(JSON.stringify(json));
+  response.end();
 };
 
 
+const mapPost = (express_app, path, callback) => {
+  express_app.post(path, (request, response) => {
+    const form = new formidable.IncomingForm();
+
+    form.parse(request, async (error, fields, files) => {
+      let results;
+      try {
+        results = await callback(fields);
+        results.error = false;
+      } catch (error) {
+        results = {};
+        results.message = error.message;
+        results.error = true;
+      }
+      writeJSON(response, results);
+    });
+  });
+};
+
+mapPost(app, '/login', user.loginWithEmail);        // tested
+mapPost(app, '/register', user.registerWithEmail);  // tested
+mapPost(app, '/fblogin', facebook.login);
+mapPost(app, '/fbregister', facebook.register);
+mapPost(app, '/userinfo', user.getInfo);    // TODO: rename?
+mapPost(app, '/gameprivateinfo', game.getPrivateGameInfo);
+mapPost(app, '/gamepublicinfo', game.getPublicGameInfo);    // TODO: replace with list public games?
+mapPost(app, '/stocklist', game.getStockList);
+mapPost(app, '/buystock', game.buyStock);
+mapPost(app, '/sellstock', game.sellStock);
+mapPost(app, '/joingame', game.joinGame);
+mapPost(app, '/leaderboard', game.getLeaderboard);
+mapPost(app, '/buyhistory', user.getBuyHistory);
+mapPost(app, '/sellhistory', user.getSellHistory);
+mapPost(app, '/followuser', user.followUser);
+mapPost(app, '/unfollowuser', user.unfollowUser);
+
+// TODO: merge followers list/following list/user public info to getUserPublicProfile???
+
+
+mapPost(admin_app, '/userlist', admin.getUserList);
+mapPost(admin_app, '/gamelist', admin.getGameList);
+
+
+
+activate_app.get('/activate', async (request, response) => {
+  const token = request.query.token;
+
+  try {
+    if (token === undefined) {
+      throw new Error("Invalid parameters");
+    }
+
+    const result = await user.activateUser(token);
+
+    // TODO: show success page
+    writeJSON(response, {error: false, result: result});
+  } catch (error) {
+    // TODO: show error page
+    writeJSON(response, {error: true, message: error.message});
+  }
+});
+
+
+
+/*
 
 // *****************************************************************************
 // POST /login: login with email/password
@@ -221,7 +282,7 @@ app.post('/stocklist', (request, response) => {
   const form = new formidable.IncomingForm();
 
   form.parse(request, async (error, fields, files) => {
-    const market_id = fields.market_id;
+    const game_id = fields.game_id;
 
     let result_json;
     try {
@@ -229,7 +290,7 @@ app.post('/stocklist', (request, response) => {
         throw new Error("Invalid parameters");
       }
 
-      const stock_list = await game.getStockList(market_id);
+      const stock_list = await game.getStockList(game_id);
 
       result_json = {error: false, stock_list: stock_list};
     } catch (error) {
@@ -342,6 +403,7 @@ app.post('/joingame', (request, response) => {
     writeJSON(response, result_json);
   });
 });
+
 
 // *****************************************************************************
 // POST /leaderboard: Get the leaderboard for the given game
@@ -686,7 +748,16 @@ app.post('/upload', (req, res) => {
     }
   });
 });
+*/
 
 app.listen(3000, () => {
   console.log('HTTP server started at 3000');
+});
+
+admin_app.listen(3333, () => {
+  console.log('Admin server started at 3333');
+});
+
+activate_app.listen(3666, () => {
+  console.log('Activation server started at 3666');
 });

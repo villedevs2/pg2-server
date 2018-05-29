@@ -132,10 +132,17 @@ const isValidFBToken = (token, user_id) => {
 };
 
 
-const login = (fb_account, auth_token) => {
+const login = (params) => {
   return new Promise(async (resolve, reject) => {
 
     try {
+      const fb_account = params.fb_account;
+      const auth_token = params.auth_token;
+
+      if (fb_account === undefined || auth_token === undefined) {
+        throw new Error("FBLOGIN_INVALID_PARAMETERS");
+      }
+
       const token_valid = await isValidFBToken(auth_token, fb_account);
       if (!token_valid) {
         throw new Error("FBLOGIN_INVALID_TOKEN");
@@ -163,6 +170,14 @@ const login = (fb_account, auth_token) => {
 const register = (fb_account, auth_token, user_name) => {
   return new Promise(async (resolve, reject) => {
     try {
+      const fb_account = params.fb_account;
+      const auth_token = params.auth_token;
+      const user_name = params.user_name;
+
+      if (fb_account === undefined || auth_token === undefined || user_name === undefined) {
+        throw new Error("FBREGISTER_INVALID_PARAMETERS");
+      }
+
       // first check for valid FB token
       const token_valid = await isValidFBToken(auth_token, fb_account);
       if (!token_valid) {
@@ -183,11 +198,14 @@ const register = (fb_account, auth_token, user_name) => {
       if (!reg_ok) {
         throw new Error("FBREGISTER_REG_FAIL");
       }
+
       // get user id for the new account
       const user_id = await getUserID(fb_account);
       if (user_id === null) {
         throw new Error("FBREGISTER_USER_ID_NOT_FOUND");
       }
+
+      await user.commonRegister(user_id);
 
       const login_ok = await user.commonLogin(user_id);
       resolve(login_ok);

@@ -19,11 +19,29 @@ const getStockPrice = (stock_id) => {
   });
 };
 
-const getGameInfo = (game_id) => {
+// Private info about a game. User needs to have joined to access this info.
+const getPrivateGameInfo = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `SELECT base_funds, private, pass, start_time, end_time, closed FROM game WHERE id='${game_id}'`;
-
     try {
+      const game_id = params.game_id;
+      const access_token = params.token;
+
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      const has_joined = await hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!has_joined) {
+        throw new Error("PLAYER_NOT_JOINED");
+      }
+
+      let sql = `SELECT base_funds, private, pass, start_time, end_time, closed FROM game WHERE id='${game_id}'`;
+
       const results = await db.query(sql);
       if (results.length !== 1) {
         throw new Error("GETGAMEINFO_NOT_FOUND");
@@ -112,6 +130,7 @@ const isTradingOpen = (game_id) => {
 // ***************************************************************************
 // Returns true if user has joined the given game
 // ***************************************************************************
+// TODO: rename to user?
 const hasPlayerJoinedGame = (user_id, game_id) => {
   return new Promise(async (resolve, reject) => {
     let sql = `SELECT * FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
@@ -156,11 +175,18 @@ const getPublicGameInfo = (game_id) => {
 
 
 // ***************************************************************************
-// Gets the list of stock for the given market
+// Gets the list of stock for the given game
 // ***************************************************************************
-const getStockList = (game_id) => {
+const getStockList = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `
+    try {
+      const game_id = params.game_id;
+
+      if (game_id === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      let sql = `
         SELECT
         s.symbol AS 'symbol',
         s.full_name AS 'full_name',
@@ -169,9 +195,8 @@ const getStockList = (game_id) => {
         s.update_date AS 'update_date'
         FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'`;
 
-    try {
       const results = await db.query(sql);
-      resolve(results);
+      resolve({stock_list: results});
     } catch (error) {
       reject(error);
     }
@@ -231,9 +256,39 @@ const getStockFallers = (game_id, amount) => {
 // ***************************************************************************
 // Get the leaderboard for the given game
 // ***************************************************************************
-const getLeaderboard =(game_id, start, amount) => {
+const getLeaderboard =(params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `
+
+
+    try {
+      const game_id = params.game_id;
+      const access_token = params.token;
+      let start = params.start;
+      let amount = params.amount;
+
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("GETLEADERBOARD_INVALID_PARAMS");
+      }
+
+      if (start === undefined) {
+        start = 0;
+      }
+      if (amount === undefined) {
+        amount = 15;
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("GETLEADERBOARD_ACCESS_TOKEN");
+      }
+
+      // user needs to be part of this game to view leaderboard
+      const joined_game = await hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw new Error("GETLEADERBOARD_NOT_JOINED");
+      }
+
+      let sql = `
         SELECT u.username, u.image, SUM(assets) AS 'net_worth'
         FROM(
         SELECT user_id, stock.full_name, (buy_sum-sell_sum)*stock.price AS 'assets'
@@ -256,7 +311,6 @@ const getLeaderboard =(game_id, start, amount) => {
         GROUP BY user_id 
         LIMIT '${start}', '${amount}'`;
 
-    try {
       const results = await db.query(sql);
       resolve(results);
     } catch (error) {
@@ -269,9 +323,21 @@ const getLeaderboard =(game_id, start, amount) => {
 // ***************************************************************************
 // Attempts to add the given user to the given game
 // ***************************************************************************
-const joinGame = (game_id, user_id, password) => {
+const joinGame = (params) => {
   return new Promise(async (resolve, reject) => {
     try {
+      const game_id = params.game_id;
+      const access_token = params.token;
+
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
       const game_info = await getGameInfo(game_id);
 
       if (game_info.closed) {
@@ -302,7 +368,7 @@ const joinGame = (game_id, user_id, password) => {
           VALUES('${user_id}', '${game_id}', '${game_info.base_funds}')`;
 
       const results = await db.query(sql);
-      resolve('OK');
+      resolve({message: 'OK'});
     } catch (error) {
       reject(error);
     }
@@ -470,9 +536,23 @@ const editGameEndTime = (game_id, end_time) => {
 // ***************************************************************************
 // Attempts to buy stock with given user
 // ***************************************************************************
-const buyStock = (game_id, user_id, stock_id, amount) => {
+const buyStock = (params) => {
   return new Promise(async (resolve, reject) => {
     try {
+      const game_id = params.game_id;
+      const amount = params.amount;
+      const stock_id = params.stock_id;
+      const access_token = params.token;
+
+      if (amount === undefined || stock_id === undefined || game_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
       const stock_price = await getStockPrice(stock_id);
       const user_funds = await user.getUserFunds(user_id, game_id);
 
@@ -485,6 +565,7 @@ const buyStock = (game_id, user_id, stock_id, amount) => {
 
       // TODO: only allow buying when stock market is open?
       // TODO: only allow buying when game is active (start_time, end_time)
+      // TODO: check trading hours
 
       const game_closed = await isGameClosed(game_id);
       if (game_closed) {
@@ -510,9 +591,9 @@ const buyStock = (game_id, user_id, stock_id, amount) => {
 
       let funds_sql = `UPDATE user_game SET funds=funds-'${needed_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
-      const results = await db.transaction(stock_sql, funds_sql, 1, 1);
+      await db.transaction(stock_sql, funds_sql, 1, 1);
 
-      resolve(results);
+      resolve({message: 'OK'});
     } catch (error) {
       reject(error);
     }
@@ -523,9 +604,23 @@ const buyStock = (game_id, user_id, stock_id, amount) => {
 // ***************************************************************************
 // Attempts to sell stock with given user
 // ***************************************************************************
-const sellStock = (game_id, user_id, stock_id, amount) => {
+const sellStock = (params) => {
   return new Promise(async (resolve, reject) => {
     try {
+      const amount = params.amount;
+      const stock_id = params.stock_id;
+      const game_id = params.game_id;
+      const access_token = params.token;
+
+      if (amount === undefined || stock_id === undefined || game_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
       const stock_price = await getStockPrice(stock_id);
       const user_stock = await user.getUserStock(user_id, game_id, stock_id);
 
@@ -537,6 +632,7 @@ const sellStock = (game_id, user_id, stock_id, amount) => {
 
       // TODO: only allow selling when stock market is open?
       // TODO: only allow selling when game is active (start_time, end_time)
+      // TODO: check trading hours
 
       const game_closed = await isGameClosed(game_id);
       if (game_closed) {
@@ -564,9 +660,9 @@ const sellStock = (game_id, user_id, stock_id, amount) => {
 
       let funds_sql = `UPDATE user_game SET funds=funds+'${rewarded_funds}' WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
-      const results = await db.transaction(stock_sql, funds_sql, 1, 1);
+      await db.transaction(stock_sql, funds_sql, 1, 1);
 
-      resolve(results);
+      resolve({message: 'OK'});
     } catch (error) {
       reject(error);
     }
@@ -590,12 +686,14 @@ const getAllGames = () => {
 
 
 module.exports = {
+  getPrivateGameInfo: getPrivateGameInfo,
   getPublicGameInfo: getPublicGameInfo,
   getStockList: getStockList,
   getStockRisers: getStockRisers,
   getStockFallers: getStockFallers,
   getLeaderboard: getLeaderboard,
   joinGame: joinGame,
+  hasPlayerJoinedGame: hasPlayerJoinedGame,
   createOpenGame: createOpenGame,
   createSeasonalGame: createSeasonalGame,
   createPrivateGame: createPrivateGame,

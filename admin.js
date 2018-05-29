@@ -47,38 +47,40 @@ const validateAdminToken = (token) => {
 };
 
 
+
+const getUserList = (admin_token) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const valid_token = validateAdminToken(admin_token);
+      if (!valid_token) {
+        throw new Error("GETUSERLIST_INVALID_TOKEN");
+      }
+
+      const result = await user.getAllUsers();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const getGameList = (admin_token) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const valid_token = validateAdminToken(admin_token);
+      if (!valid_token) {
+        throw new Error("GETGAMELIST_INVALID_TOKEN");
+      }
+
+      const result = await game.getAllGames();
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
 module.exports = {
-
-  getUserList: (admin_token) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const valid_token = validateAdminToken(admin_token);
-        if (!valid_token) {
-          throw new Error("GETUSERLIST_INVALID_TOKEN");
-        }
-
-        const result = await user.getAllUsers();
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-  getGameList: (admin_token) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const valid_token = validateAdminToken(admin_token);
-        if (!valid_token) {
-          throw new Error("GETGAMELIST_INVALID_TOKEN");
-        }
-
-        const result = await game.getAllGames();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  },
-
-
+  getUserList: getUserList,
+  getGameList: getGameList,
 };

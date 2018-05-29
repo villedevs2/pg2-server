@@ -74,6 +74,12 @@ const hashPassword = (password) => {
   return hash.digest('hex');
 };
 
+const hashAvatarImage = (image) => {
+  const hash = crypto.createHash('sha256');
+  hash.update(`${image}.${settings.db_avatar_image_salt}`);
+  return hash.digest('hex');
+}
+
 const getUserIDWithEmail = (email) => {
   return new Promise(async (resolve, reject) => {
     let sql = `SELECT id FROM user_account WHERE email='${email}'`;
@@ -330,6 +336,31 @@ const activateUser = (token) => {
 };
 
 
+const commonRegister = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const url = `avatar-${hashAvatarImage(user_id)}.webp`;
+
+      // make default avatar image
+      // TODO
+
+      // upload to S3
+      // TODO
+
+      // update image url to DB
+      let sql = `UPDATE user_account SET image='${url}' WHERE id='${user_id}'`;
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("AVATAR_UPDATE_FAIL");
+      }
+      resolve();
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const commonLogin = (user_id) => {
   return new Promise(async (resolve, reject) => {
     try {
@@ -500,10 +531,21 @@ const getUserGames = (user_id) => {
 // TODO: rename?
 const getInfo = (user_id, access_token) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `SELECT username, access_token, signup_date, image `;
-    sql +=    `FROM user_account WHERE id='${user_id}'`;
-
     try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      let sql = `
+        SELECT username, access_token, signup_date, image
+        FROM user_account WHERE id='${token_info.user_id}'`;
+
       const results = await db.query(sql);
       if (results.length !== 1) {
         throw new Error("GETINFO_NOT_FOUND");
@@ -550,20 +592,32 @@ const getUserPublicInfo = (user_id) => {
 // *****************************************************************************
 // Follow a user
 // *****************************************************************************
-const followUser = (user_id, followed_user_id) => {
+const followUser = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `INSERT INTO user_follow(user_id, followed_id) VALUES('${user_id}', '${followed_user_id}')`;
-
     try {
-      if (user_id === followed_user_id) {
+      const followed_user_id = params.followed_id;
+      const access_token = params.token;
+
+      if (followed_user_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      if (token_info.user_id === followed_user_id) {
         throw new Error('FOLLOW_USER_SELF');
       }
+
+      let sql = `INSERT INTO user_follow(user_id, followed_id) VALUES('${token_info.user_id}', '${followed_user_id}')`;
 
       const result = await db.query(sql);
       if (result.affectedRows !== 1) {
         throw new Error('FOLLOW_USER_RESULT');
       }
-      resolve('OK');
+      resolve({message: 'OK'});
     } catch (error) {
       console.log(error);
       reject('DATABASE_FAIL');
@@ -574,16 +628,28 @@ const followUser = (user_id, followed_user_id) => {
 // *****************************************************************************
 // Unfollow a user
 // *****************************************************************************
-const unfollowUser = (user_id, followed_user_id) => {
+const unfollowUser = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `DELETE FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
-
     try {
+      const followed_user_id = params.followed_id;
+      const access_token = params.token;
+
+      if (followed_user_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      let sql = `DELETE FROM user_follow WHERE user_id='${token_info.user_id}' AND followed_id='${followed_user_id}'`;
+
       const result = await db.query(sql);
       if (result.affectedRows !== 1) {
         throw new Error('UNFOLLOW_USER_RESULT');
       }
-      resolve('OK');
+      resolve({message: 'OK'});
     } catch (error) {
       console.log(error);
       reject('DATABASE_FAIL');
@@ -694,23 +760,33 @@ const getUserFunds = (user_id, game_id) => {
 // *****************************************************************************
 // Get the buy history for user/game
 // *****************************************************************************
-const getBuyHistory = (user_id, game_id) => {
+const getBuyHistory = (params) => {
   return new Promise(async (resolve, reject) => {
-    /*
-    let sql = ``;
-    sql += `SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst' `;
-    sql += `FROM stock_event, stock AS s `;
-    sql += `WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}' `;
-    sql += `ORDER BY tst DESC`;
-    */
+    try {
+      const game_id = params.game_id;
+      const access_token = params.token;
 
-    let sql = ` 
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      // user needs to have joined this game
+      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw new Error("PLAYER_NOT_JOINED");
+      }
+
+      let sql = ` 
         SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
         FROM stock_event, stock AS s
-        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
+        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${token_info.user_id}' AND game_id='${game_id}'
         ORDER BY tst DESC`;
 
-    try {
       const results = await db.query(sql);
       resolve(results);
     } catch (error) {
@@ -722,15 +798,33 @@ const getBuyHistory = (user_id, game_id) => {
 // *****************************************************************************
 // Get the sell history for user/game
 // *****************************************************************************
-const getSellHistory = (user_id, game_id) => {
+const getSellHistory = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `
+    try {
+      const game_id = params.game_id;
+      const access_token = params.token;
+
+      if (game_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = user.validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      // user needs to have joined this game
+      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      if (!joined_game) {
+        throw new Error("PLAYER_NOT_JOINED");
+      }
+
+      let sql = `
         SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
         FROM stock_event, stock AS s
-        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
+        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${token_info.user_id}' AND game_id='${game_id}'
         ORDER BY tst DESC`;
 
-    try {
       const results = await db.query(sql);
       resolve(results);
     } catch (error) {
@@ -777,9 +871,16 @@ const getUserStock = (user_id, game_id, stock_id) => {
 // *****************************************************************************
 // Try to login with email/password
 // *****************************************************************************
-const loginWithEmail = (email, password) => {
+const loginWithEmail = (params) => {
   return new Promise(async (resolve, reject) => {
     try {
+      const email = params.email;
+      const password = params.password;
+
+      if (email === undefined || password === undefined) {
+        throw new Error("EMLOGIN_INVALID_PARAMETERS");
+      }
+
       const valid_email = validator.isEmail(email);
       if (!valid_email) {
         throw new Error("EMLOGIN_INVALID_EMAIL");
@@ -819,9 +920,17 @@ const loginWithEmail = (email, password) => {
 // *****************************************************************************
 // Try to register with email
 // *****************************************************************************
-const registerWithEmail = (email, password, username) => {
+const registerWithEmail = (params) => {
   return new Promise(async (resolve, reject) => {
     try {
+      const email = params.email;
+      const password = params.password;
+      const username = params.username;
+
+      if (email === undefined || password === undefined || username === undefined) {
+        throw new Error("EMREGISTER_INVALID_PARAMETERS");
+      }
+
       // validate username
       const valid_username = username_regex.exec(username) !== null;
       if (!valid_username) {
@@ -861,6 +970,12 @@ const registerWithEmail = (email, password, username) => {
         throw new Error("EMREGISTER_REG_FAIL");
       }
 
+      const user_id = await getUserIDWithEmail(email);
+      if (user_id === null) {
+        throw new Error("EMREGISTER_ERROR");
+      }
+      await commonRegister(user_id);
+
       // get user id for the new account
       /*
       const user_id = await getUserIDWithEmail(email);
@@ -875,7 +990,7 @@ const registerWithEmail = (email, password, username) => {
 
       await sendActivationMail(email, username);
 
-      resolve('OK');
+      resolve({message: 'OK' });
     } catch (error) {
       reject(error);
     }
@@ -965,6 +1080,7 @@ module.exports = {
   getSellHistory: getSellHistory,
   getUserStock: getUserStock,
   commonLogin: commonLogin,
+  commonRegister: commonRegister,
   loginWithEmail: loginWithEmail,
   registerWithEmail: registerWithEmail,
   editUserName: editUserName,
