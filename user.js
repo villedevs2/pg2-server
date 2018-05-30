@@ -97,13 +97,25 @@ const getUserIDWithEmail = (email) => {
   });
 };
 
-const isUserFollowed = (user_id, followed_user_id) => {
+const isUserFollowed = (params) => {
   return new Promise(async (resolve, reject) => {
-    let sql = `SELECT * FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
-
     try {
+      const followed_user_id = params.followed_id;
+      const access_token = params.token;
+
+      if (followed_user_id === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      let sql = `SELECT * FROM user_follow WHERE user_id='${token_info.user_id}' AND followed_id='${followed_user_id}'`;
+
       const result = await db.query(sql);
-      resolve(result.length === 1);
+      resolve({followed: result.length === 1});
     } catch (error) {
       reject(error);
     }
@@ -125,6 +137,23 @@ const countUserFollowers = (user_id) => {
         followers = result[0].followers;
       }
       resolve(followers);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const countUserFollowing = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    let sql = `SELECT COUNT(user_id) AS 'following' FROM user_follow WHERE user_id='${user_id}'`;
+
+    try {
+      const result = await db.query(sql);
+      let following = 0;
+      if (result.length === 1) {
+        following = result[0].following;
+      }
+      resolve(following);
     } catch (error) {
       reject(error);
     }
@@ -574,11 +603,7 @@ const getUserPublicProfile = (params) => {
       }
 
       const num_followers = await countUserFollowers(user_id);
-
-      // TODO: should followers/following be shown in public profile?
-
-      const followers_list = await getFollowerList(user_id);
-      const following_list = await getFollowingList(user_id);
+      const num_following = await countUserFollowing(user_id);
 
       let sql = `SELECT username, signup_date, image FROM user_account WHERE id='${user_id}'`;
       const results = await db.query(sql);
@@ -588,9 +613,7 @@ const getUserPublicProfile = (params) => {
       }
 
       results[0].num_followers = num_followers;
-
-      results[0].followers = followers_list;
-      results[0].following = following_list;
+      results[0].num_following = num_following;
 
       resolve(results[0]);
     } catch (error) {
@@ -669,8 +692,7 @@ const followUser = (params) => {
       }
       resolve({message: 'OK'});
     } catch (error) {
-      console.log(error);
-      reject('DATABASE_FAIL');
+      reject(error);
     }
   });
 };
@@ -701,8 +723,7 @@ const unfollowUser = (params) => {
       }
       resolve({message: 'OK'});
     } catch (error) {
-      console.log(error);
-      reject('DATABASE_FAIL');
+      reject(error);
     }
   });
 };
@@ -723,8 +744,7 @@ const getFollowerList = (user_id) => {
       const results = await db.query(sql);
       resolve(results);
     } catch (error) {
-      console.log(error);
-      reject('DATABASE_FAIL');
+      reject(error);
     }
   });
 };
@@ -745,14 +765,13 @@ const getFollowingList = (user_id) => {
       const results = await db.query(sql);
       resolve(results);
     } catch (error) {
-      console.log(error);
-      reject('DATABASE_FAIL');
+      reject(error);
     }
   });
 };
 
 
-const sendUserMessage = (user_id, sender_id, message) => {
+const sendMessage = (user_id, sender_id, message) => {
   return new Promise(async (resolve, reject) => {
     try {
       // validate message contents
@@ -780,8 +799,33 @@ const sendUserMessage = (user_id, sender_id, message) => {
       }
       resolve('OK');
     } catch (error) {
-      console.log(error);
-      reject('DATABASE_FAIL');
+      reject(error);
+    }
+  });
+};
+
+const sendUserMessage = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const user_id = params.user_id;
+      const message_title = params.message_title;
+      const message_body = params.message_body;
+      const access_token = params.token;
+
+      if (user_id === undefined || message_title === undefined ||
+          message_body === undefined || access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const token_info = validateAccessToken(access_token);
+      if (!token_info.valid) {
+        throw new Error("INVALID_ACCESS_TOKEN");
+      }
+
+      await sendMessage(user_id, token_info.user_id, {title: message_title, message: message_body});
+      resolve({message: 'OK'});
+    } catch (error) {
+      reject(error);
     }
   });
 };
@@ -1212,6 +1256,7 @@ module.exports = {
   getUserPrivateProfile: getUserPrivateProfile,
   followUser: followUser,
   unfollowUser: unfollowUser,
+  isUserFollowed: isUserFollowed,
   getFollowerList: getFollowerList,
   getFollowingList: getFollowingList,
   sendUserMessage: sendUserMessage,
