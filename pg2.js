@@ -57,13 +57,13 @@ mapPost(app, '/user/fblogin', facebook.login);
 mapPost(app, '/user/fbregister', facebook.register);
 //mapPost(app, '/userinfo', user.getInfo);    // TODO: rename?
 mapPost(app, '/user/publicprofile', user.getUserPublicProfile);       // tested
-mapPost(app, '/user/privateprofile', user.getUserPrivateProfile);
+mapPost(app, '/user/privateprofile', user.getUserPrivateProfile);     // tested
 mapPost(app, '/user/follow', user.followUser);                        // tested
 mapPost(app, '/user/unfollow', user.unfollowUser);                    // tested
 mapPost(app, '/user/isfollowed', user.isUserFollowed);                // tested
 mapPost(app, '/user/messages', user.getUserMessageList);
-mapPost(app, '/user/readmessage', user.readUserMessage);
-mapPost(app, '/user/sendmessage', user.sendUserMessage);
+mapPost(app, '/user/readmessage', user.readUserMessage);              // tested
+mapPost(app, '/user/sendmessage', user.sendUserMessage);              // tested
 
 mapPost(app, '/game/privateinfo', game.getPrivateGameInfo);
 mapPost(app, '/game/publicinfo', game.getPublicGameInfo);    // TODO: replace with list public games?

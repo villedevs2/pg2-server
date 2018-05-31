@@ -30,12 +30,9 @@ const getPrivateGameInfo = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = user.validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = user.validateAccessToken(access_token);
 
-      const has_joined = await hasPlayerJoinedGame(token_info.user_id, game_id);
+      const has_joined = await hasPlayerJoinedGame(user_id, game_id);
       if (!has_joined) {
         throw new Error("PLAYER_NOT_JOINED");
       }
@@ -277,13 +274,10 @@ const getLeaderboard =(params) => {
         amount = 15;
       }
 
-      const token_info = user.validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("GETLEADERBOARD_ACCESS_TOKEN");
-      }
+      const user_id = user.validateAccessToken(access_token);
 
       // user needs to be part of this game to view leaderboard
-      const joined_game = await hasPlayerJoinedGame(token_info.user_id, game_id);
+      const joined_game = await hasPlayerJoinedGame(user_id, game_id);
       if (!joined_game) {
         throw new Error("GETLEADERBOARD_NOT_JOINED");
       }
@@ -333,10 +327,7 @@ const joinGame = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = user.validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = user.validateAccessToken(access_token);
 
       const game_info = await getGameInfo(game_id);
 
@@ -548,10 +539,7 @@ const buyStock = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = user.validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = user.validateAccessToken(access_token);
 
       const stock_price = await getStockPrice(stock_id);
       const user_funds = await user.getUserFunds(user_id, game_id);
@@ -572,7 +560,7 @@ const buyStock = (params) => {
         throw new Error("BUYSTOCK_GAME_CLOSED");
       }
 
-      const joined_game = await hasPlayerJoinedGame(token_info.user_id, game_id);
+      const joined_game = await hasPlayerJoinedGame(user_id, game_id);
       if (!joined_game) {
         throw new Error("BUYSTOCK_NOT_JOINED");
       }
@@ -616,10 +604,7 @@ const sellStock = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = user.validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = user.validateAccessToken(access_token);
 
       const stock_price = await getStockPrice(stock_id);
       const user_stock = await user.getUserStock(user_id, game_id, stock_id);

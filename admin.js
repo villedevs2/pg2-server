@@ -43,7 +43,9 @@ const validateAdminToken = (token) => {
   const version = buffer.readUInt16BE(0);
   const token_id = buffer.slice(2, 7).toString('utf8');
 
-  return (version === ADMIN_TOKEN_VERSION && token_id === ADMIN_TOKEN_ID);
+  if (version === ADMIN_TOKEN_VERSION && token_id === ADMIN_TOKEN_ID) {
+    throw new Error("INVALID_TOKEN");
+  }
 };
 
 
@@ -51,10 +53,7 @@ const validateAdminToken = (token) => {
 const getUserList = (admin_token) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const valid_token = validateAdminToken(admin_token);
-      if (!valid_token) {
-        throw new Error("GETUSERLIST_INVALID_TOKEN");
-      }
+      validateAdminToken(admin_token);
 
       const result = await user.getAllUsers();
       resolve(result);
@@ -67,10 +66,7 @@ const getUserList = (admin_token) => {
 const getGameList = (admin_token) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const valid_token = validateAdminToken(admin_token);
-      if (!valid_token) {
-        throw new Error("GETGAMELIST_INVALID_TOKEN");
-      }
+      validateAdminToken(admin_token);
 
       const result = await game.getAllGames();
     } catch (error) {

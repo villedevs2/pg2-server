@@ -52,6 +52,18 @@ const doesEmailExist = (email) => {
   });
 };
 
+const doesUserExist = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `SELECT id FROM user_account WHERE id='${user_id}'`;
+      const results = await db.query(sql);
+      resolve(results.length === 1);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const getAccountStatus = (user_id) => {
   return new Promise(async (resolve, reject) => {
     let sql = `SELECT account_status FROM user_account WHERE user_id='${user_id}'`;
@@ -107,12 +119,9 @@ const isUserFollowed = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
-      let sql = `SELECT * FROM user_follow WHERE user_id='${token_info.user_id}' AND followed_id='${followed_user_id}'`;
+      let sql = `SELECT * FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
 
       const result = await db.query(sql);
       resolve({followed: result.length === 1});
@@ -197,10 +206,11 @@ const validateAccessToken = (token) => {
   const token_id = buffer.slice(2, 9).toString('utf8');
   const user_id = buffer.readUInt32BE(9);
 
-  return {
-    valid: (version === ACCESS_TOKEN_VERSION && token_id === ACCESS_TOKEN_ID),
-    user_id: user_id,
-  };
+  if (version !== ACCESS_TOKEN_VERSION || token_id !== ACCESS_TOKEN_ID) {
+    throw new Error("INVALID_ACCESS_TOKEN");
+  }
+
+  return user_id;
 };
 
 const updateAccessToken = (user_id, access_token) => {
@@ -565,14 +575,11 @@ const getInfo = (user_id, access_token) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
       let sql = `
         SELECT username, access_token, signup_date, image
-        FROM user_account WHERE id='${token_info.user_id}'`;
+        FROM user_account WHERE id='${user_id}'`;
 
       const results = await db.query(sql);
       if (results.length !== 1) {
@@ -631,18 +638,15 @@ const getUserPrivateProfile = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
-      const num_followers = await countUserFollowers(token_info.user_id);
-      const followers_list = await getFollowerList(token_info.user_id);
-      const following_list = await getFollowingList(token_info.user_id);
+      const num_followers = await countUserFollowers(user_id);
+      const followers_list = await getFollowerList(user_id);
+      const following_list = await getFollowingList(user_id);
 
       let sql = `
         SELECT username, signup_date, image
-        FROM user_account WHERE id='${token_info.user_id}'`;
+        FROM user_account WHERE id='${user_id}'`;
 
       const results = await db.query(sql);
       if (results.length !== 1) {
@@ -675,16 +679,13 @@ const followUser = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
-      if (token_info.user_id === followed_user_id) {
+      if (user_id === followed_user_id) {
         throw new Error('FOLLOW_USER_SELF');
       }
 
-      let sql = `INSERT INTO user_follow(user_id, followed_id) VALUES('${token_info.user_id}', '${followed_user_id}')`;
+      let sql = `INSERT INTO user_follow(user_id, followed_id) VALUES('${user_id}', '${followed_user_id}')`;
 
       const result = await db.query(sql);
       if (result.affectedRows !== 1) {
@@ -710,12 +711,9 @@ const unfollowUser = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
-      let sql = `DELETE FROM user_follow WHERE user_id='${token_info.user_id}' AND followed_id='${followed_user_id}'`;
+      let sql = `DELETE FROM user_follow WHERE user_id='${user_id}' AND followed_id='${followed_user_id}'`;
 
       const result = await db.query(sql);
       if (result.affectedRows !== 1) {
@@ -771,9 +769,14 @@ const getFollowingList = (user_id) => {
 };
 
 
-const sendMessage = (user_id, sender_id, message) => {
+const sendMessage = (recipient_id, sender_id, message) => {
   return new Promise(async (resolve, reject) => {
     try {
+      // can't send messages to self
+      if (recipient_id == sender_id) {
+        throw new Error("RECIPIENT_IS_SELF");
+      }
+
       // validate message contents
       let message_sane = validator.escape(message.message);
       message_sane = validator.stripLow(message_sane, true);
@@ -788,10 +791,14 @@ const sendMessage = (user_id, sender_id, message) => {
         sender_id = `'${sender_id}'`;
       }
 
+      const recipient_exists = await doesUserExist(recipient_id);
+      if (!recipient_exists) {
+        throw new Error("RECIPIENT_NOT_FOUND");
+      }
 
       let sql = `
           INSERT INTO user_message(user_id, sender_id, title, message)
-          VALUES('${user_id}', ${sender_id}, '${title_sane}', '${message_sane}')`;
+          VALUES('${recipient_id}', ${sender_id}, '${title_sane}', '${message_sane}')`;
 
       const result = await db.query(sql);
       if (result.affectedRows !== 1) {
@@ -807,22 +814,19 @@ const sendMessage = (user_id, sender_id, message) => {
 const sendUserMessage = (params) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const user_id = params.user_id;
+      const recipient_id = params.user_id;
       const message_title = params.message_title;
       const message_body = params.message_body;
       const access_token = params.token;
 
-      if (user_id === undefined || message_title === undefined ||
+      if (recipient_id === undefined || message_title === undefined ||
           message_body === undefined || access_token === undefined) {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
-      await sendMessage(user_id, token_info.user_id, {title: message_title, message: message_body});
+      await sendMessage(recipient_id, user_id, {title: message_title, message: message_body});
       resolve({message: 'OK'});
     } catch (error) {
       reject(error);
@@ -839,13 +843,10 @@ const getUserMessageList = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
       let sql = `
-        SELECT sender_id, title, message_read FROM user_message WHERE user_id='${token_info.user_id}'`;
+        SELECT sender_id, title, message_read FROM user_message WHERE user_id='${user_id}'`;
 
       const results = await db.query(sql);
       resolve(results);
@@ -864,14 +865,11 @@ const readUserMessage = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
       let sql = `
         SELECT sender_id, title, message_read, message
-        FROM user_message WHERE id='${message_id}' AND user_id='${token_info.user_id}'`;
+        FROM user_message WHERE id='${message_id}' AND user_id='${user_id}'`;
 
       const result = await db.query(sql);
 
@@ -879,7 +877,7 @@ const readUserMessage = (params) => {
       if (result.length === 1) {
         if (result[0].message_read === 0) {
           let update_sql = `
-            UPDATE user_message SET message_read='1' WHERE id='${message_id}' AND user_id='${token_info.user_id}'`;
+            UPDATE user_message SET message_read='1' WHERE id='${message_id}' AND user_id='${user_id}'`;
 
           await db.query(update_sql);
         }
@@ -908,12 +906,9 @@ const getUserFunds = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
-      let sql = `SELECT funds FROM user_game WHERE user_id='${token_info.user_id}' AND game_id='${game_id}'`;
+      let sql = `SELECT funds FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
       const results = await db.query(sql);
       if (results.length !== 1) {
@@ -940,13 +935,10 @@ const getBuyHistory = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = user.validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
       // user needs to have joined this game
-      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      const joined_game = await game.hasPlayerJoinedGame(user_id, game_id);
       if (!joined_game) {
         throw new Error("PLAYER_NOT_JOINED");
       }
@@ -954,7 +946,7 @@ const getBuyHistory = (params) => {
       let sql = ` 
         SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
         FROM stock_event, stock AS s
-        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${token_info.user_id}' AND game_id='${game_id}'
+        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
         ORDER BY tst DESC`;
 
       const results = await db.query(sql);
@@ -978,13 +970,10 @@ const getSellHistory = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = user.validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
       // user needs to have joined this game
-      const joined_game = await game.hasPlayerJoinedGame(token_info.user_id, game_id);
+      const joined_game = await game.hasPlayerJoinedGame(user_id, game_id);
       if (!joined_game) {
         throw new Error("PLAYER_NOT_JOINED");
       }
@@ -992,7 +981,7 @@ const getSellHistory = (params) => {
       let sql = `
         SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
         FROM stock_event, stock AS s
-        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${token_info.user_id}' AND game_id='${game_id}'
+        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
         ORDER BY tst DESC`;
 
       const results = await db.query(sql);
@@ -1017,10 +1006,7 @@ const getUserStock = (params) => {
         throw new Error("INVALID_PARAMETERS");
       }
 
-      const token_info = validateAccessToken(access_token);
-      if (!token_info.valid) {
-        throw new Error("INVALID_ACCESS_TOKEN");
-      }
+      const user_id = validateAccessToken(access_token);
 
       let sql = `;
         SELECT buy_sum-sell_sum AS 'assets'
@@ -1029,11 +1015,11 @@ const getUserStock = (params) => {
         FROM(
         SELECT user_id, stock_id, amount AS 'buy', 0 AS 'sell'
         FROM stock_event
-        WHERE transaction_type='B' AND game_id='${game_id}' AND user_id='${token_info.user_id}' AND stock_id='${stock_id}'
+        WHERE transaction_type='B' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}'
         UNION ALL
         SELECT user_id, stock_id, 0 AS 'buy', amount AS 'sell'
         FROM stock_event
-        WHERE transaction_type='S' AND game_id='${game_id}' AND user_id='${token_info.user_id}' AND stock_id='${stock_id}'
+        WHERE transaction_type='S' AND game_id='${game_id}' AND user_id='${user_id}' AND stock_id='${stock_id}'
         ) AS summed
         GROUP BY user_id, stock_id
         ) AS final, stock
