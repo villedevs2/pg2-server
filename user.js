@@ -481,9 +481,41 @@ const unbanUser = (user_id) => {
 };
 
 
+// internal, don't export
+const getActivePremium = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `
+        SELECT id FROM user_premium WHERE user_id='${user_id}' AND
+        IF(CURRENT_TIME >= start_time, true, false) AND
+        IF(CURRENT_TIME < end_time, true, false)`;
+
+      const results = await db.query(sql);
+      if (results.length === 0) {
+        resolve({active: false});
+      } else {
+        let end_sql = `
+          SELECT DATE_FORMAT(MAX(end_time), "%Y-%m-%d %H:%i:%s") as 'end_time' FROM user_premium
+          WHERE user_id='${user_id}' AND IF(CURRENT_TIME < end_time, true, false)`;
+
+        const results = await db.query(end_sql);
+        if (results.length !== 1) {
+          resolve({active: false});
+        } else {
+          resolve({active: true, end_time: results[0].end_time});
+        }
+      }
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
 const addPremium = (user_id, num_days) => {
   return new Promise(async (resolve, reject) => {
     try {
+      /*
       // check if user already has premium active
       const has_premium = await user.hasPremium(user_id);
 
@@ -507,16 +539,58 @@ const addPremium = (user_id, num_days) => {
       const result = await db.query(sql);
       if (result.affectedRows !== 1) {
         throw new Error("ADDPREMIUM_FAIL");
+      }*/
+
+      let sql;
+      const hours = num_days * 24;
+
+      // check for active premium
+      const premium = await getActivePremium(user_id);
+      console.log(premium);
+      if (!premium.active) {
+        // start new premium from current time
+        sql = `
+          INSERT INTO user_premium(user_id, start_time, end_time)
+          VALUES('${user_id}', CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL '${hours}' HOUR))`;
+      } else {
+        // extend premium from the end of latest
+        sql = `
+          INSERT INTO user_premium(user_id, start_time, end_time)
+          VALUES('${user_id}', '${premium.end_time}', DATE_ADD('${premium.end_time}', INTERVAL '${hours}' HOUR))`;
       }
-      resolve('OK');
+      console.log(sql);
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("ADD_PREMIUM_FAIL");
+      }
+
+      resolve({message: 'OK'});
     } catch (error) {
       reject(error);
     }
   });
 };
 
-const hasPremium = (user_id) => {
+// TODO: REMOVE
+const addUserPremium = (params) => {
   return new Promise(async (resolve, reject) => {
+    try {
+      const user_id = params.user_id;
+      const num_days = params.num_days;
+
+      const result = await addPremium(user_id, num_days);
+
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const hasPremium = (params) => {
+  return new Promise(async (resolve, reject) => {
+    /*
     let sql = `
         SELECT IF(CURRENT_TIMESTAMP < premium_end, true, false) AS 'premium'
         FROM user_account WHERE id='${user_id}'`;
@@ -527,6 +601,21 @@ const hasPremium = (user_id) => {
         throw new Error("HASPREMIUM_NOT_FOUND");
       }
       resolve(result[0].premium);
+    } catch (error) {
+      reject(error);
+    }*/
+
+    try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const user_id = validateAccessToken(access_token);
+
+      const premium = await getActivePremium(user_id);
+
+      resolve(premium);
     } catch (error) {
       reject(error);
     }
@@ -1259,5 +1348,8 @@ module.exports = {
   editUserName: editUserName,
   getAvatarOptions: getAvatarOptions,
   setUserAvatar: setUserAvatar,
+
+  // TODO REMOVE ME
+  addUserPremium: addUserPremium,
 };
 

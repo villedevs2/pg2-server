@@ -100,6 +100,24 @@ const isGameClosed = (game_id) => {
   });
 };
 
+// for internal use, don't export
+const getGameInfo = (game_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `
+        SELECT game_type, closed, pass, base_funds, start_time, end_time
+        FROM game WHERE id='${game_id}'`;
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("GAME_NOT_FOUND");
+      }
+      resolve(result[0]);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const isTradingOpen = (game_id) => {
   return new Promise(async (resolve, reject) => {
     let sql = `
@@ -149,26 +167,70 @@ const hashGamePassword = (password) => {
 
 
 
-// ***************************************************************************
-// Gets the public information about a given game
-// ***************************************************************************
-const getPublicGameInfo = (game_id) => {
+const getPublicGameList = () => {
   return new Promise(async (resolve, reject) => {
-    let sql = `
-        SELECT name, description, start_time, end_time
-        FROM game WHERE id='${game_id}'`;
-
     try {
+      // TODO: only show active ones
+
+      let sql = `
+        SELECT id, name, description, game_type, start_time, end_time
+        FROM game WHERE game_type='open' OR game_type='season' OR game_type='promotion'`;
+
       const results = await db.query(sql);
-      if (results.length !== 1) {
-        throw new Error("GETGAMEINFO_NOT_FOUND");
-      }
       resolve(results);
     } catch (error) {
       reject(error);
     }
   });
 };
+
+const getUserJoinedGames = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      // TODO: only show active ones (not end of season)
+
+      const user_id = user.validateAccessToken(access_token);
+
+      let sql = `
+        SELECT g.id, g.name, g.description, g.game_type, g.start_time, g.end_time
+        FROM game AS g, user_game AS ug WHERE ug.game_id=g.id AND ug.user_id='${user_id}'`;
+
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+const getUserOwnedGames = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const user_id = user.validateAccessToken(access_token);
+
+      let sql = `
+        SELECT id, name, description, start_time, end_time
+        FROM game WHERE owner_id='${user_id}'`;
+
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 
 
 // ***************************************************************************
@@ -672,7 +734,9 @@ const getAllGames = () => {
 
 module.exports = {
   getPrivateGameInfo: getPrivateGameInfo,
-  getPublicGameInfo: getPublicGameInfo,
+  getPublicGameList: getPublicGameList,
+  getUserJoinedGames: getUserJoinedGames,
+  getUserOwnedGames: getUserOwnedGames,
   getStockList: getStockList,
   getStockRisers: getStockRisers,
   getStockFallers: getStockFallers,
