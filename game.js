@@ -37,7 +37,9 @@ const getPrivateGameInfo = (params) => {
         throw new Error("PLAYER_NOT_JOINED");
       }
 
-      let sql = `SELECT base_funds, private, pass, start_time, end_time, closed FROM game WHERE id='${game_id}'`;
+      let sql = `
+        SELECT base_funds, private, pass, start_time, end_time, closed, per_trade_fee, per_stock_fee
+        FROM game WHERE id='${game_id}'`;
 
       const results = await db.query(sql);
       if (results.length !== 1) {
@@ -105,7 +107,7 @@ const getGameInfo = (game_id) => {
   return new Promise(async (resolve, reject) => {
     try {
       let sql = `
-        SELECT game_type, closed, pass, base_funds, start_time, end_time
+        SELECT game_type, closed, pass, base_funds, start_time, end_time, per_trade_fee, per_stock_fee
         FROM game WHERE id='${game_id}'`;
       const result = await db.query(sql);
       if (result.length !== 1) {
@@ -603,15 +605,20 @@ const buyStock = (params) => {
 
       const user_id = user.validateAccessToken(access_token);
 
+      const game_info = await getGameInfo(game_id);
+
+      // calculate game-specific fees for this trade
+      const fees = game_info.per_trade_fee + (game_info.per_stock_fee * amount);
+
       const stock_price = await getStockPrice(stock_id);
       const user_funds = await user.getUserFunds(user_id, game_id);
 
-      const needed_funds = Number(amount) * Number(stock_price);
+      const needed_funds = (Number(amount) * Number(stock_price)) + Number(fees);
       if (needed_funds > user_funds) {
         throw new Error("BUYSTOCK_NOT_ENOUGH");
       }
 
-      const game_info = await getGameInfo(game_id);
+
 
       // TODO: only allow buying when stock market is open?
       // TODO: only allow buying when game is active (start_time, end_time)
@@ -677,6 +684,7 @@ const sellStock = (params) => {
 
       const game_info = await getGameInfo(game_id);
 
+
       // TODO: only allow selling when stock market is open?
       // TODO: only allow selling when game is active (start_time, end_time)
       // TODO: check trading hours
@@ -698,7 +706,17 @@ const sellStock = (params) => {
         }
       }
 
-      const rewarded_funds = Number(amount) * Number(stock_price);
+      // calculate game-specific fees for this trade
+      const fees = Number(game_info.per_trade_fee + (game_info.per_stock_fee * amount));
+
+      // Include fees into rewarded funds. This can go negative.
+      const rewarded_funds = (Number(amount) * Number(stock_price)) - fees;
+      const user_funds = Number(await user.getUserFunds(user_id, game_id));
+
+      // check if we are going negative after fees
+      if ((user_funds + rewarded_funds) < 0) {
+        throw new Error("SELLSTOCK_NOT_ENOUGH_FUNDS");
+      }
 
       // start sell transaction
       let stock_sql = `

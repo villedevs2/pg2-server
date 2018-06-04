@@ -622,6 +622,26 @@ const hasPremium = (params) => {
   });
 };
 
+const listPremiums = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const user_id = validateAccessToken(access_token);
+
+      let sql = `SELECT start_time, end_time FROM user_premium WHERE user_id='${user_id}'`;
+
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 
 const getAllUsers = () => {
   return new Promise(async (resolve, reject) => {
@@ -968,6 +988,7 @@ const readUserMessage = (params) => {
           let update_sql = `
             UPDATE user_message SET message_read='1' WHERE id='${message_id}' AND user_id='${user_id}'`;
 
+          // TODO: no need to await?
           await db.query(update_sql);
         }
       }
@@ -1300,6 +1321,29 @@ const setUserAvatar = (user_id, avatar) => {
 };
 
 
+const getUserRewards = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const access_token = params.token;
+      if (access_token === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      const user_id = validateAccessToken(access_token);
+
+      let sql = `
+        SELECT r.name, r.description, r.image
+        FROM reward AS r, user_reward AS ur WHERE ur.reward_id=r.id AND ur.user_id='${user_id}'`;
+
+      const results = await db.query(sql);
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
 module.exports = {
   // ***************************************************************************
   // Generate a new access token
@@ -1324,6 +1368,7 @@ module.exports = {
   isUserActivated: isUserActivated,
   addPremium: addPremium,
   hasPremium: hasPremium,
+  listPremiums: listPremiums,
   getAllUsers: getAllUsers,
   getUserGames: getUserGames,
   getInfo: getInfo,

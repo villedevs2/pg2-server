@@ -65,6 +65,7 @@ mapPost(app, '/user/messages', user.getUserMessageList);
 mapPost(app, '/user/readmessage', user.readUserMessage);              // tested
 mapPost(app, '/user/sendmessage', user.sendUserMessage);              // tested
 mapPost(app, '/user/haspremium', user.hasPremium);
+mapPost(app, '/user/premiumlist', user.listPremiums);
 
 mapPost(app, '/test/addpremium', user.addUserPremium);
 
