@@ -264,13 +264,17 @@ const getStockList = (params) => {
   });
 };
 
-const getStockRisers = (game_id, amount) => {
+const getStockRisers = (params) => {
   return new Promise(async (resolve, reject) => {
-    if (amount === null) {
-      amount = 5;
-    }
+    try {
+      const game_id = params.game_id;
+      let amount = params.amount;
 
-    let sql = `
+      if (amount === null) {
+        amount = '5';
+      }
+
+      let sql = `
         SELECT
         s.symbol AS 'symbol',
         s.full_name AS 'full_name',
@@ -278,9 +282,8 @@ const getStockRisers = (game_id, amount) => {
         s.variety AS 'variety',
         s.update_date AS 'update_date'
         FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'
-        ORDER BY s.variety LIMIT '${amount}'`;
+        ORDER BY s.variety DESC LIMIT ${amount}`;
 
-    try {
       const results = await db.query(sql);
       resolve(results);
     } catch (error) {
@@ -289,13 +292,17 @@ const getStockRisers = (game_id, amount) => {
   });
 };
 
-const getStockFallers = (game_id, amount) => {
+const getStockFallers = (params) => {
   return new Promise(async (resolve, reject) => {
-    if (amount === null) {
-      amount = 5;
-    }
+    try {
+      const game_id = params.game_id;
+      let amount = params.amount;
 
-    let sql = `
+      if (amount === null) {
+        amount = '5';
+      }
+
+      let sql = `
         SELECT
         s.symbol AS 'symbol',
         s.full_name AS 'full_name',
@@ -303,9 +310,8 @@ const getStockFallers = (game_id, amount) => {
         s.variety AS 'variety',
         s.update_date AS 'update_date'
         FROM stock AS s, game AS g WHERE s.market_id=g.market_id AND g.id='${game_id}'
-        ORDER BY s.variety DESC LIMIT '${amount}'`;
+        ORDER BY s.variety ASC LIMIT ${amount}`;
 
-    try {
       const results = await db.query(sql);
       resolve(results);
     } catch (error) {

@@ -86,6 +86,8 @@ mapPost(app, '/game/buyhistory', user.getBuyHistory);
 mapPost(app, '/game/sellhistory', user.getSellHistory);
 mapPost(app, '/game/funds', game.getUserFunds);
 mapPost(app, '/game/stock', game.getUserStock);
+mapPost(app, '/game/stockrisers', game.getStockRisers);
+mapPost(app, '/game/stockfallers', game.getStockFallers);
 
 mapPost(admin_app, '/admin/userlist', admin.getUserList);
 mapPost(admin_app, '/admin/gamelist', admin.getGameList);
