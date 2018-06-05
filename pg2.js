@@ -64,19 +64,21 @@ mapPost(app, '/user/isfollowed', user.isUserFollowed);                // tested
 mapPost(app, '/user/messages', user.getUserMessageList);
 mapPost(app, '/user/readmessage', user.readUserMessage);              // tested
 mapPost(app, '/user/sendmessage', user.sendUserMessage);              // tested
-mapPost(app, '/user/haspremium', user.hasPremium);
-mapPost(app, '/user/premiumlist', user.listPremiums);
+mapPost(app, '/user/haspremium', user.hasPremium);                    // tested
+mapPost(app, '/user/premiumlist', user.listPremiums);                 // tested
+mapPost(app, '/user/rewards', user.getUserRewards);                   // tested
 
+// TODO remove
 mapPost(app, '/test/addpremium', user.addUserPremium);
 
 
 
 mapPost(app, '/game/privateinfo', game.getPrivateGameInfo);
 mapPost(app, '/game/publiclist', game.getPublicGameList);             // tested
-mapPost(app, '/game/joinedgames', game.getUserJoinedGames);
+mapPost(app, '/game/joinedgames', game.getUserJoinedGames);           // tested
 mapPost(app, '/game/ownedgames', game.getUserOwnedGames);
-mapPost(app, '/game/stocklist', game.getStockList);
-mapPost(app, '/game/buystock', game.buyStock);
+mapPost(app, '/game/stocklist', game.getStockList);                   // tested
+mapPost(app, '/game/buystock', game.buyStock);                        // tested
 mapPost(app, '/game/sellstock', game.sellStock);
 mapPost(app, '/game/join', game.joinGame);
 mapPost(app, '/game/leaderboard', game.getLeaderboard);

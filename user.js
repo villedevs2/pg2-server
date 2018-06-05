@@ -1006,25 +1006,17 @@ const readUserMessage = (params) => {
 // *****************************************************************************
 // Gets the funds of a given user/game
 // *****************************************************************************
-const getUserFunds = (params) => {
+const getUserFunds = (user_id, game_id) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const game_id = params.game_id;
-      const access_token = params.token;
-
-      if (game_id === undefined || access_token === undefined) {
-        throw new Error("INVALID_PARAMETERS");
-      }
-
-      const user_id = validateAccessToken(access_token);
-
       let sql = `SELECT funds FROM user_game WHERE user_id='${user_id}' AND game_id='${game_id}'`;
 
       const results = await db.query(sql);
-      if (results.length !== 1) {
-        throw new Error("GETUSERFUNDS_NOT_FOUND");
+      let funds = null;
+      if (results.length === 1) {
+        funds = results[0].funds;
       }
-      resolve(results[0].funds);
+      resolve(funds);
     } catch (error) {
       reject(error);
     }
@@ -1105,20 +1097,11 @@ const getSellHistory = (params) => {
 // *****************************************************************************
 // Get the amount of given stock for user/game
 // *****************************************************************************
-const getUserStock = (params) => {
+// TODO: make different version for external access
+const getUserStock = (user_id, game_id, stock_id) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const game_id = params.game_id;
-      const stock_id = params.stock_id;
-      const access_token = params.token;
-
-      if (game_id === undefined || stock_id === undefined || access_token === undefined) {
-        throw new Error("INVALID_PARAMETERS");
-      }
-
-      const user_id = validateAccessToken(access_token);
-
-      let sql = `;
+      let sql = `
         SELECT buy_sum-sell_sum AS 'assets'
         FROM(
         SELECT user_id, stock_id, SUM(buy) AS buy_sum, SUM(sell) AS sell_sum
@@ -1136,10 +1119,11 @@ const getUserStock = (params) => {
         WHERE final.stock_id=stock.id `;
 
       const results = await db.query(sql);
-      if (results.length !== 1) {
-        throw new Error("GETUSERSTOCK_NOT_FOUND");
+      let stock = null;
+      if (results.length === 1) {
+        stock = results[0].assets;
       }
-      resolve(results[0].assets);
+      resolve(stock);
     } catch (error) {
       reject(error);
     }
@@ -1320,6 +1304,25 @@ const setUserAvatar = (user_id, avatar) => {
   });
 };
 
+const awardUserReward = (user_id, reward_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `
+        INSERT INTO user_reward(user_id, reward_id, award_time)
+        VALUES('${user_id}', '${reward_id}', CURRENT_TIMESTAMP)`;
+
+      const result = await db.query(sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("AWARD_REWARD_FAIL");
+      }
+      resolve({message: 'OK'});
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
 
 const getUserRewards = (params) => {
   return new Promise(async (resolve, reject) => {
@@ -1332,7 +1335,7 @@ const getUserRewards = (params) => {
       const user_id = validateAccessToken(access_token);
 
       let sql = `
-        SELECT r.name, r.description, r.image
+        SELECT r.name, r.description, r.image, ur.award_time
         FROM reward AS r, user_reward AS ur WHERE ur.reward_id=r.id AND ur.user_id='${user_id}'`;
 
       const results = await db.query(sql);
@@ -1393,6 +1396,7 @@ module.exports = {
   editUserName: editUserName,
   getAvatarOptions: getAvatarOptions,
   setUserAvatar: setUserAvatar,
+  getUserRewards: getUserRewards,
 
   // TODO REMOVE ME
   addUserPremium: addUserPremium,

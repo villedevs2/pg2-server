@@ -199,7 +199,7 @@ const getUserJoinedGames = (params) => {
       const user_id = user.validateAccessToken(access_token);
 
       let sql = `
-        SELECT g.id, g.name, g.description, g.game_type, g.start_time, g.end_time
+        SELECT g.id, g.name, g.description, g.game_type, g.start_time, g.end_time, g.image
         FROM game AS g, user_game AS ug WHERE ug.game_id=g.id AND ug.user_id='${user_id}'`;
 
       const results = await db.query(sql);
@@ -222,7 +222,7 @@ const getUserOwnedGames = (params) => {
       const user_id = user.validateAccessToken(access_token);
 
       let sql = `
-        SELECT id, name, description, start_time, end_time
+        SELECT id, name, description, start_time, end_time, image
         FROM game WHERE owner_id='${user_id}'`;
 
       const results = await db.query(sql);
