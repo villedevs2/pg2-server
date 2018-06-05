@@ -82,12 +82,12 @@ mapPost(app, '/game/buystock', game.buyStock);                        // tested
 mapPost(app, '/game/sellstock', game.sellStock);
 mapPost(app, '/game/join', game.joinGame);
 mapPost(app, '/game/leaderboard', game.getLeaderboard);
-mapPost(app, '/game/buyhistory', user.getBuyHistory);
-mapPost(app, '/game/sellhistory', user.getSellHistory);
-mapPost(app, '/game/funds', game.getUserFunds);
-mapPost(app, '/game/stock', game.getUserStock);
-mapPost(app, '/game/stockrisers', game.getStockRisers);
-mapPost(app, '/game/stockfallers', game.getStockFallers);
+mapPost(app, '/game/buyhistory', game.getBuyHistory);                 // tested
+mapPost(app, '/game/sellhistory', game.getSellHistory);               // tested
+mapPost(app, '/game/funds', game.getUserFunds);   // TODO needs new function
+mapPost(app, '/game/stock', game.getUserStock);   // TODO needs new function
+mapPost(app, '/game/stockrisers', game.getStockRisers);               // tested
+mapPost(app, '/game/stockfallers', game.getStockFallers);             // tested
 
 mapPost(admin_app, '/admin/userlist', admin.getUserList);
 mapPost(admin_app, '/admin/gamelist', admin.getGameList);

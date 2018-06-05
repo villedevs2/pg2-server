@@ -1025,76 +1025,6 @@ const getUserFunds = (user_id, game_id) => {
 
 
 // *****************************************************************************
-// Get the buy history for user/game
-// *****************************************************************************
-const getBuyHistory = (params) => {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const game_id = params.game_id;
-      const access_token = params.token;
-
-      if (game_id === undefined || access_token === undefined) {
-        throw new Error("INVALID_PARAMETERS");
-      }
-
-      const user_id = validateAccessToken(access_token);
-
-      // user needs to have joined this game
-      const joined_game = await game.hasPlayerJoinedGame(user_id, game_id);
-      if (!joined_game) {
-        throw new Error("PLAYER_NOT_JOINED");
-      }
-
-      let sql = ` 
-        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
-        FROM stock_event, stock AS s
-        WHERE transaction_type='B' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
-        ORDER BY tst DESC`;
-
-      const results = await db.query(sql);
-      resolve(results);
-    } catch (error) {
-      reject(error);
-    }
-  });
-};
-
-// *****************************************************************************
-// Get the sell history for user/game
-// *****************************************************************************
-const getSellHistory = (params) => {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const game_id = params.game_id;
-      const access_token = params.token;
-
-      if (game_id === undefined || access_token === undefined) {
-        throw new Error("INVALID_PARAMETERS");
-      }
-
-      const user_id = validateAccessToken(access_token);
-
-      // user needs to have joined this game
-      const joined_game = await game.hasPlayerJoinedGame(user_id, game_id);
-      if (!joined_game) {
-        throw new Error("PLAYER_NOT_JOINED");
-      }
-
-      let sql = `
-        SELECT s.symbol, s.full_name, amount, unit_price, DATE_FORMAT(transaction_time, '%d.%m.%Y %k:%i:%s') AS 'tst'
-        FROM stock_event, stock AS s
-        WHERE transaction_type='S' AND s.id=stock_id AND user_id='${user_id}' AND game_id='${game_id}'
-        ORDER BY tst DESC`;
-
-      const results = await db.query(sql);
-      resolve(results);
-    } catch (error) {
-      reject(error);
-    }
-  });
-};
-
-// *****************************************************************************
 // Get the amount of given stock for user/game
 // *****************************************************************************
 // TODO: make different version for external access
@@ -1386,8 +1316,6 @@ module.exports = {
   getUserMessageList: getUserMessageList,
   readUserMessage: readUserMessage,
   getUserFunds: getUserFunds,
-  getBuyHistory: getBuyHistory,
-  getSellHistory: getSellHistory,
   getUserStock: getUserStock,
   commonLogin: commonLogin,
   commonRegister: commonRegister,
