@@ -64,6 +64,49 @@ const doesUserExist = (user_id) => {
   });
 };
 
+
+const hasReward = (user_id, reward_name) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `
+        SELECT r.id FROM user_reward AS ur, reward AS r
+        WHERE ur.reward_id=r.id AND ur.user_id='${user_id}'`;
+      const result = await db.query(sql);
+      resolve(results.length === 1);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
+const canCreateGame = (user_id) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const has_premium = await getActivePremium(user_id);
+
+      // premium can always create game
+      if (has_premium) {
+        resolve(true);
+      }
+
+      // check for game creation reward
+      const has_game_creation = await hasReward(user_id, 'USER_CREATE_GAME');
+      if (has_game_creation) {
+        resolve(true);
+      }
+
+      // TODO: check for user game limit
+
+      // not allowed to create a game
+      resolve(false);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+
 const getAccountStatus = (user_id) => {
   return new Promise(async (resolve, reject) => {
     let sql = `SELECT account_status FROM user_account WHERE user_id='${user_id}'`;
@@ -1325,6 +1368,7 @@ module.exports = {
   getAvatarOptions: getAvatarOptions,
   setUserAvatar: setUserAvatar,
   getUserRewards: getUserRewards,
+  canCreateGame: canCreateGame,
 
   // TODO REMOVE ME
   addUserPremium: addUserPremium,

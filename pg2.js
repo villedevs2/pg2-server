@@ -79,9 +79,10 @@ mapPost(app, '/game/joinedgames', game.getUserJoinedGames);           // tested
 mapPost(app, '/game/ownedgames', game.getUserOwnedGames);
 mapPost(app, '/game/stocklist', game.getStockList);                   // tested
 mapPost(app, '/game/buystock', game.buyStock);                        // tested
-mapPost(app, '/game/sellstock', game.sellStock);
+mapPost(app, '/game/sellstock', game.sellStock);                      // tested
 mapPost(app, '/game/join', game.joinGame);
-mapPost(app, '/game/leaderboard', game.getLeaderboard);
+mapPost(app, '/game/create', game.createUserGame);
+mapPost(app, '/game/leaderboard', game.getLeaderboard);               // tested
 mapPost(app, '/game/buyhistory', game.getBuyHistory);                 // tested
 mapPost(app, '/game/sellhistory', game.getSellHistory);               // tested
 mapPost(app, '/game/funds', game.getUserFunds);   // TODO needs new function

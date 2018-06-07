@@ -1,5 +1,7 @@
 const db = require('./database');
 const user = require('./user');
+const crypto = require('crypto');
+const validator = require('validator');
 
 const settings = require('./settings.json');
 
@@ -18,6 +20,24 @@ const getStockPrice = (stock_id) => {
     }
   });
 };
+
+
+const getMarketID = (market_name) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let sql = `SELECT id FROM stock_market WHERE shortname='${market_name}'`;
+
+      const result = await db.query(sql);
+      if (result.length !== 1) {
+        throw new Error("MARKET_ID_NOT_FOUND");
+      }
+      resolve(result[0].id);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 
 // Private info about a game. User needs to have joined to access this info.
 const getPrivateGameInfo = (params) => {
@@ -338,10 +358,10 @@ const getLeaderboard =(params) => {
       }
 
       if (start === undefined) {
-        start = 0;
+        start = '0';
       }
       if (amount === undefined) {
-        amount = 15;
+        amount = '15';
       }
 
       const user_id = user.validateAccessToken(access_token);
@@ -373,7 +393,7 @@ const getLeaderboard =(params) => {
         ) AS a, user_account AS u
         WHERE u.id=user_id 
         GROUP BY user_id 
-        LIMIT '${start}', '${amount}'`;
+        LIMIT ${start}, ${amount}`;
 
       const results = await db.query(sql);
       resolve(results);
@@ -486,28 +506,95 @@ const createSeasonalGame = (name, description, base_funds, market_id, start_time
 
 
 // Create private game: owner, password, no duration
-const createPrivateGame = (owner_id, password, name, description, base_funds, market_id) => {
+const createPrivateGame = (owner_id, password, name, description, base_funds, market_id, per_trade_fee, per_stock_fee) => {
   return new Promise(async (resolve, reject) => {
     try {
       const hashed_pw = hashGamePassword(password);
 
       let sql = `
           INSERT INTO
-          game(owner_id, market_id, pass, game_type, name, description, start_time, end_time)
-          VALUES('${owner_id}', '${market_id}', ${hashed_pw}', 'private', '${name}', '${description}', '${base_funds}', NULL, NULL)`;
+          game(owner_id, market_id, pass, game_type, name, description,
+          base_funds, start_time, end_time, per_trade_fee, per_stock_fee)
+          VALUES('${owner_id}', '${market_id}', '${hashed_pw}', 'private', '${name}', '${description}',
+          '${base_funds}', NULL, NULL, '${per_trade_fee}', '${per_stock_fee}')`;
 
-      const result = await db.query(sql);
+      let result = await db.query(sql);
       if (result.affectedRows !== 1) {
         throw new Error("CREATEPRIVATEGAME_FAIL");
       }
 
       // return new game id
       const new_game_id = await getGameID(name);
-      resolve(new_game_id);
+
+      // TODO: require user to join manually?
+      /*
+      // owner automatically joins the game
+      let join_sql = `
+        INSERT INTO user_game(user_id, game_id, funds)
+        VALUES('${owner_id}', '${new_game_id}', '${base_funds}')`;
+
+      result = await db.query(join_sql);
+      if (result.affectedRows !== 1) {
+        throw new Error("JOIN_GAME_FAIL");
+      }
+      */
+
+      resolve({id: new_game_id});
     } catch (error) {
       reject(error);
     }
   })
+};
+
+
+const createUserGame = (params) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const access_token = params.token;
+      const name = params.name;
+      const description = params.description;
+      const pass = params.password;
+      const base_funds = params.base_funds;
+      const market_name = params.market_name;
+      const per_trade_fee = params.per_trade_fee;
+      const per_stock_fee = params.per_stock_fee;
+
+      if (access_token === undefined ||
+          name === undefined ||
+          description === undefined ||
+          pass === undefined ||
+          base_funds === undefined ||
+          market_name === undefined ||
+          per_trade_fee === undefined ||
+          per_stock_fee === undefined) {
+        throw new Error("INVALID_PARAMETERS");
+      }
+
+      // validate description
+      let description_sane = validator.escape(description);
+      description_sane = validator.stripLow(description_sane, true);
+
+      // validate name
+      let name_sane = validator.escape(name);
+      name_sane = validator.stripLow(name_sane, true);
+
+      // TODO: validate market id?
+
+      const user_id = user.validateAccessToken(access_token);
+
+      const market_id = await getMarketID(market_name);
+
+      // check if we are allowed to make a game
+      const can_create = await user.canCreateGame(user_id);
+
+      // try to create game
+      const result = await createPrivateGame(user_id, pass, name_sane, description_sane, base_funds, market_id);
+
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    }
+  });
 };
 
 
@@ -828,6 +915,16 @@ const getSellHistory = (params) => {
 
 
 
+// TODO TODO TODO
+
+// listaa:
+// public games (open, season, promo) attribuuttina onko pelaajaa joinannu
+
+// privaattipelit johon joinannu
+
+// omat pelit (ei välii onko joinannu)
+
+
 module.exports = {
   getPrivateGameInfo: getPrivateGameInfo,
   getPublicGameList: getPublicGameList,
@@ -838,6 +935,7 @@ module.exports = {
   getStockFallers: getStockFallers,
   getLeaderboard: getLeaderboard,
   joinGame: joinGame,
+  createUserGame: createUserGame,
   hasPlayerJoinedGame: hasPlayerJoinedGame,
   createOpenGame: createOpenGame,
   createSeasonalGame: createSeasonalGame,
